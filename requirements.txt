@@ -1,0 +1,14 @@
+pandas>=1.5.0
+networkx>=3.0
+matplotlib>=3.5.0
+pyvis>=0.3.1
+scipy>=1.10.1
+neo4j>=5.0.0
+langchain>=0.1.0
+langchain-openai>=0.0.5
+openai>=1.0.0
+fastapi>=0.100.0
+uvicorn>=0.23.0
+langgraph
+python-dotenv
+pydantic-settings
