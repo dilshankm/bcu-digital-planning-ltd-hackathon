@@ -44,50 +44,48 @@ jobs:
           NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
         run: |
           python - <<'PY'
-import json
-import os
+          import json
+          import os
 
-task_definition = {
-    "family": "graph-rag-task",
-    "networkMode": "awsvpc",
-    "requiresCompatibilities": ["FARGATE"],
-    "cpu": "256",
-    "memory": "512",
-    "executionRoleArn": "arn:aws:iam::223516915321:role/graph-rag-ecs-task-execution",
-    "taskRoleArn": "arn:aws:iam::223516915321:role/graph-rag-ecs-task-execution",
-    "containerDefinitions": [
-        {
-            "name": "app-container",
-            "image": os.environ["DOCKER_IMAGE"],
-            "essential": True,
-            "portMappings": [
-                {
-                    "containerPort": 8080,
-                    "protocol": "tcp"
-                }
-            ],
-            "environment": [
-                {"name": "OPENAI_API_KEY", "value": os.environ["OPENAI_API_KEY"]},
-                {"name": "NEO4J_URI", "value": os.environ["NEO4J_URI"]},
-                {"name": "NEO4J_USERNAME", "value": os.environ["NEO4J_USERNAME"]},
-                {"name": "NEO4J_PASSWORD", "value": os.environ["NEO4J_PASSWORD"]}
-            ],
-            "logConfiguration": {
-                "logDriver": "awslogs",
-                "options": {
-                    "awslogs-group": "/ecs/graph-rag",
-                    "awslogs-region": "eu-central-1",
-                    "awslogs-stream-prefix": "ecs"
-                }
-            }
-        }
-    ]
-}
+          task_definition = {
+              "family": "graph-rag-task",
+              "networkMode": "awsvpc",
+              "requiresCompatibilities": ["FARGATE"],
+              "cpu": "256",
+              "memory": "512",
+              "executionRoleArn": "arn:aws:iam::223516915321:role/graph-rag-ecs-task-execution",
+              "taskRoleArn": "arn:aws:iam::223516915321:role/graph-rag-ecs-task-execution",
+              "containerDefinitions": [
+                  {
+                      "name": "app-container",
+                      "image": os.environ["DOCKER_IMAGE"],
+                      "essential": True,
+                      "portMappings": [
+                          {
+                              "containerPort": 8080,
+                              "protocol": "tcp"
+                          }
+                      ],
+                      "environment": [
+                          {"name": "OPENAI_API_KEY", "value": os.environ["OPENAI_API_KEY"]},
+                          {"name": "NEO4J_URI", "value": os.environ["NEO4J_URI"]},
+                          {"name": "NEO4J_USERNAME", "value": os.environ["NEO4J_USERNAME"]},
+                          {"name": "NEO4J_PASSWORD", "value": os.environ["NEO4J_PASSWORD"]}
+                      ],
+                      "logConfiguration": {
+                          "logDriver": "awslogs",
+                          "options": {
+                              "awslogs-group": "/ecs/graph-rag",
+                              "awslogs-region": "eu-central-1",
+                              "awslogs-stream-prefix": "ecs"
+                          }
+                      }
+                  }
+              ]
+          }
 
-with open("task-definition.json", "w", encoding="utf-8") as f:
-    json.dump(task_definition, f)
-PY
-
+          with open("task-definition.json", "w", encoding="utf-8") as f:
+              json.dump(task_definition, f)
       - name: Register ECS task definition
         id: task-def
         run: |
