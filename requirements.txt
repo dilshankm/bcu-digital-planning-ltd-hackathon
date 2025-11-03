@@ -12,3 +12,5 @@ uvicorn>=0.23.0
 langgraph
 python-dotenv
 pydantic-settings
+chromadb>=0.5.0
+dspy-ai>=2.5.0

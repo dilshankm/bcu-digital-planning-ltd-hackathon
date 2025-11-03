@@ -1,16 +1,42 @@
 from graph.state import GraphState
 from services.neo4j_service import Neo4jService
 from services.llm_service import LLMService
+from services.vector_store_service import VectorStoreService
+from services.embedding_service import EmbeddingService
+from services.dspy_service import DSPyService
 
 
 neo4j_service = Neo4jService()
 llm_service = LLMService()
+vector_service = VectorStoreService()
+embedding_service = EmbeddingService()
+dspy_service = DSPyService()
 
 SCHEMA = """
-- Patient nodes with properties: id, birthDate, gender
-- Condition nodes with properties: description
-- Procedure nodes with properties: description
-- Relationships: HAS_CONDITION, UNDERWENT
+Neo4j Healthcare Graph Schema Summary
+
+Node Types
+- Patient(id, firstName, lastName, birthDate, deathDate, gender, race, ethnicity, marital, city, state, county, zip, income)
+- Encounter(id, start, stop, encounterClass, code, description, baseCost, totalCost, reasonCode, reasonDescription)
+- Condition(code, description, system)
+- Procedure(code, description, system)
+- Observation(code, description, category)
+
+Relationship Types
+- (Patient)-[:HAD_ENCOUNTER]->(Encounter)
+- (Patient)-[:HAS_CONDITION {start, stop}]->(Condition)
+- (Encounter)-[:DIAGNOSED]->(Condition)
+- (Patient)-[:UNDERWENT]->(Procedure)
+- (Encounter)-[:HAD_PROCEDURE {start, stop, baseCost, reasonCode, reasonDescription}]->(Procedure)
+- (Patient)-[:HAS_OBSERVATION]->(Observation)
+- (Encounter)-[:RECORDED_OBSERVATION {date, value, units, type}]->(Observation)
+
+Common Query Patterns Examples
+- Patient journey timeline via HAD_ENCOUNTER, DIAGNOSED, HAD_PROCEDURE, RECORDED_OBSERVATION
+- Co-occurring patient conditions
+- Condition to procedure co-occurrence
+- High-risk patients (>=3 conditions)
+- Utilization analysis (encounter counts, totalCost, avg cost)
 """
 
 
@@ -33,9 +59,188 @@ def execute_neo4j_query(state: GraphState) -> GraphState:
 
 
 def interpret_results(state: GraphState) -> GraphState:
-    """Use LLM to interpret results and generate answer"""
+    """Use DSPy agent with subgraph context to generate answer"""
     question = state["question"]
-    results = state["neo4j_results"]
-    answer = llm_service.interpret_results(question, results)
+    context = state.get("context", "")
+    # Fallback to LLMService if DSPy not available or context empty
+    if not context:
+        results = state["neo4j_results"]
+        answer = llm_service.interpret_results(question, results)
+    else:
+        answer = dspy_service.answer(question, context)
     state["final_answer"] = answer
     return state
+
+
+def ensure_vector_index(state: GraphState) -> GraphState:
+    """Bootstrap the vector index from Neo4j nodes if empty."""
+    # If collection has no items, populate
+    if vector_service.collection.count() == 0:
+        nodes = neo4j_service.fetch_all_nodes()
+        # Very strict initial bootstrap to avoid token limits
+        vector_service.upsert_nodes(nodes[:10])
+    return state
+
+
+def embed_question(state: GraphState) -> GraphState:
+    question = state["question"]
+    embedding = embedding_service.embed_text(question)
+    state["query_embedding"] = embedding
+    return state
+
+
+def similarity_search(state: GraphState) -> GraphState:
+    hits = vector_service.similarity_search(state["question"], top_k=5)
+    state["similar_nodes"] = hits
+    return state
+
+
+def expand_traversal(state: GraphState) -> GraphState:
+    node_ids = [hit["id"] for hit in state.get("similar_nodes", [])]
+    if not node_ids:
+        state["subgraph"] = {"nodes": [], "relationships": []}
+        return state
+    subgraph = neo4j_service.expand_subgraph(node_ids, depth=1)
+    state["subgraph"] = subgraph
+    return state
+
+
+def build_subgraph_context(state: GraphState) -> GraphState:
+    subgraph = state.get("subgraph", {"nodes": [], "relationships": []})
+    parts = []
+    parts.append("NODES:")
+    for n in subgraph.get("nodes", []):
+        label = n.get("label")
+        properties = n.get("properties", {})
+        kv = ", ".join(f"{k}={v}" for k, v in properties.items())
+        parts.append(f"- ({n.get('id')}:{label} {{ {kv} }})")
+    parts.append("RELATIONSHIPS:")
+    for r in subgraph.get("relationships", []):
+        parts.append(f"- ({r.get('start')})-[:{r.get('type')}]->({r.get('end')})")
+    context = "\n".join(parts)
+    state["context"] = context
+    return state
+
+
+# Agent-style nodes
+
+def planner_agent(state: GraphState) -> GraphState:
+    question = state["question"]
+    context = state.get("context", "")
+    prompt = (
+        "You are a planner agent. Given a question and optional graph context, "
+        "produce a short step-by-step plan using available actions: "
+        "[SIMILARITY_SEARCH, TRAVERSE_SUBGRAPH, GENERATE_CYPHER, EXECUTE_QUERY, SYNTHESIZE]. "
+        "Be concise."
+    )
+    plan = llm_service.interpret_results(
+        question=f"{prompt}\n\nQuestion: {question}",
+        results=[{"context": context}]
+    )
+    state["plan"] = plan
+    return state
+
+
+def retriever_agent(state: GraphState) -> GraphState:
+    # Ensure index, embed, search, expand, build context
+    print("\n🔍 [RETRIEVER AGENT] Executing retrieval pipeline...")
+    ensure_vector_index(state)
+    embed_question(state)
+    similarity_search(state)
+    expand_traversal(state)
+    build_subgraph_context(state)
+    print(f"   ✅ Retrieved context ({len(state.get('context', ''))} chars)")
+    return state
+
+
+def cypher_agent(state: GraphState) -> GraphState:
+    # Use both schema and built context to generate higher-precision Cypher
+    print("\n💾 [CYPHER AGENT] Generating Cypher query...")
+    question = state["question"]
+    context = state.get("context", "")
+    augmented_schema = f"{SCHEMA}\n\nContext:\n{context}"
+    cypher_query = llm_service.generate_cypher(question, augmented_schema)
+    state["cypher_query"] = cypher_query
+    print(f"   ✅ Generated: {cypher_query[:100]}...")
+    return state
+
+
+def synthesizer_agent(state: GraphState) -> GraphState:
+    # Leverage DSPy multi-agent result synthesis over context + db results
+    print("\n🎨 [SYNTHESIZER AGENT] Synthesizing final answer with DSPy multi-agent pipeline...")
+    question = state["question"]
+    context = state.get("context", "")
+    results = state.get("neo4j_results", [])
+    if context or results:
+        composite_context = f"Context:\n{context}\n\nResults:\n{results}"
+        answer = dspy_service.answer(question, composite_context)
+    else:
+        answer = llm_service.interpret_results(question, results)
+    state["final_answer"] = answer
+    print(f"   ✅ Final answer generated!")
+    return state
+
+
+def _append_message(state: GraphState, role: str, content: str) -> None:
+    msgs = state.get("messages", [])
+    msgs.append({"role": role, "content": content})
+    state["messages"] = msgs
+
+
+def planner_decide(state: GraphState) -> GraphState:
+    """Autonomous planner that decides next action and updates loop counters."""
+    # Increment step and enforce budget
+    step = state.get("step", 0) + 1
+    state["step"] = step
+    max_steps = state.get("max_steps", 6)
+
+    print(f"\n🎯 [PLANNER] Step {step}/{max_steps}")
+
+    if step > max_steps:
+        state["decision"] = "end"
+        state["confidence"] = 0.5
+        print(f"   ⚠️  Step budget exceeded. Ending workflow.")
+        _append_message(state, "planner", f"Step budget exceeded ({step}>{max_steps}). Ending.")
+        return state
+
+    question = state.get("question", "")
+    context = state.get("context", "")
+    cypher = state.get("cypher_query", "")
+    results = state.get("neo4j_results", [])
+
+    # Heuristic policy for autonomous routing
+    if not context:
+        decision = "retrieve"
+        rationale = "No graph context yet; retrieve similar nodes and expand subgraph."
+    elif not cypher:
+        decision = "query"
+        rationale = "Have context but no Cypher; generate Cypher next."
+    elif cypher and (results is None or len(results) == 0):
+        decision = "execute"
+        rationale = "Have Cypher but no results; execute query."
+    else:
+        decision = "answer"
+        rationale = "Have context and results; synthesize final answer."
+
+    state["decision"] = decision
+    state["confidence"] = 0.7
+    print(f"   📋 Decision: {decision.upper()}")
+    print(f"   💡 Rationale: {rationale}")
+    _append_message(state, "planner", f"Decision: {decision}. Rationale: {rationale}")
+    _append_message(state, "user", question)
+    if context:
+        _append_message(state, "context", context[:1000])
+    return state
+
+
+def router_next_action(state: GraphState) -> str:
+    """Return the key for the next node based on planner decision."""
+    decision = state.get("decision", "answer")
+    mapping = {
+        "retrieve": "retriever_agent",
+        "query": "cypher_agent",
+        "execute": "execute_query",
+        "answer": "synthesizer_agent",
+        "end": "END",
+    }
+    return mapping.get(decision, "synthesizer_agent")

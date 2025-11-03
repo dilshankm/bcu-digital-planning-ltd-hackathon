@@ -24,7 +24,19 @@ async def ask_question(q: Question):
         "cypher_query": "",
         "neo4j_results": [],
         "final_answer": "",
-        "error": ""
+        "error": "",
+        "query_embedding": [],
+        "similar_nodes": [],
+        "subgraph": {"nodes": [], "relationships": []},
+        "context": ""
+        ,
+        "plan": ""
+        ,
+        "messages": [],
+        "step": 0,
+        "max_steps": 6,
+        "decision": "",
+        "confidence": 0.0
     }
 
     # Run the graph

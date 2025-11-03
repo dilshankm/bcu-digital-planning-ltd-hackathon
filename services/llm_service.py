@@ -6,7 +6,7 @@ class LLMService:
     def __init__(self):
         settings = get_settings()
         self.llm = ChatOpenAI(
-            model="gpt-4",
+            model="gpt-3.5-turbo",
             api_key=settings.openai_api_key,
             temperature=0
         )
