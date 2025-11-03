@@ -21,6 +21,8 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ secrets.AWS_REGION }}
+          audience: sts.amazonaws.com
+          output-env-credentials: true
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
