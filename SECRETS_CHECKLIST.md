@@ -1,6 +1,6 @@
 # GitHub Secrets Checklist - COMPLETE LIST
 
-## 📋 All 13 Required Secrets
+## 📋 All 14 Required Secrets
 
 Go to: **GitHub Repository → Settings → Secrets and variables → Actions → New repository secret**
 
@@ -9,10 +9,11 @@ Go to: **GitHub Repository → Settings → Secrets and variables → Actions �
 ## ✅ Copy this template and fill in your values:
 
 ```bash
-# ===== AWS Credentials (3) =====
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
-AWS_REGION=us-east-1
+# ===== AWS Credentials (4) - For AWS Learner Lab =====
+AWS_ACCESS_KEY_ID=ASIATICVFOZ42I2SFSDL
+AWS_SECRET_ACCESS_KEY=1tNhVhYEnUsXxeDo3MVBZkHS0XtJMoJWxoxznajr
+AWS_SESSION_TOKEN=<your-full-session-token-here>
+AWS_REGION=eu-central-1
 
 # ===== Docker Hub (2) =====
 DOCKER_USERNAME=dilshankm
@@ -35,10 +36,11 @@ NEO4J_PASSWORD=
 
 ## 📝 Detailed Breakdown:
 
-### 1. AWS Credentials (3 secrets)
-- [ ] **AWS_ACCESS_KEY_ID** - Your AWS IAM access key
-- [ ] **AWS_SECRET_ACCESS_KEY** - Your AWS IAM secret key
-- [ ] **AWS_REGION** - AWS region (e.g., `us-east-1`, `eu-west-1`)
+### 1. AWS Credentials (4 secrets - for AWS Learner Lab/Temporary Credentials)
+- [ ] **AWS_ACCESS_KEY_ID** - Your AWS access key (starts with ASIA...)
+- [ ] **AWS_SECRET_ACCESS_KEY** - Your AWS secret key
+- [ ] **AWS_SESSION_TOKEN** - Your AWS session token (REQUIRED for temporary credentials)
+- [ ] **AWS_REGION** - AWS region (e.g., `us-east-1`, `eu-central-1`)
 
 ### 2. Docker Hub (2 secrets)
 - [ ] **DOCKER_USERNAME** - Your Docker Hub username (e.g., `dilshankm`)
@@ -145,13 +147,31 @@ aws ecs create-service \
 
 ---
 
+## ⚠️ IMPORTANT: AWS Session Token Expires!
+
+**AWS Learner Lab credentials are TEMPORARY** and expire after a few hours.
+
+**When credentials expire:**
+1. Go back to AWS Learner Lab
+2. Click "AWS Details" → "Show" under AWS CLI credentials
+3. Copy the new credentials
+4. Update these 3 secrets in GitHub:
+   - `AWS_ACCESS_KEY_ID`
+   - `AWS_SECRET_ACCESS_KEY`
+   - `AWS_SESSION_TOKEN`
+
+**Pro Tip**: Set a reminder to refresh credentials every 3-4 hours during development.
+
+---
+
 ## ✅ Checklist Before Pushing
 
-- [ ] All 13 secrets added to GitHub
+- [ ] All 14 secrets added to GitHub
 - [ ] ECS cluster created
 - [ ] ECS service created
 - [ ] CloudWatch log group created
 - [ ] IAM roles created
 - [ ] Security group configured
+- [ ] AWS session token is current (not expired)
 
 **Once done, tell me and I'll push to GitHub!** 🚀
