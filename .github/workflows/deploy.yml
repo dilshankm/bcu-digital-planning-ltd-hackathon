@@ -39,16 +39,16 @@ jobs:
         run: |
           cat > task-definition.json <<EOF
           {
-            "family": "graphrag-hackathon-task",
+            "family": "graph-rag-task",
             "networkMode": "awsvpc",
             "requiresCompatibilities": ["FARGATE"],
-            "cpu": "1024",
-            "memory": "2048",
-            "executionRoleArn": "${{ secrets.ECS_EXECUTION_ROLE_ARN }}",
-            "taskRoleArn": "${{ secrets.ECS_TASK_ROLE_ARN }}",
+            "cpu": "256",
+            "memory": "512",
+            "executionRoleArn": "arn:aws:iam::223516915321:role/graph-rag-ecs-task-execution",
+            "taskRoleArn": "arn:aws:iam::223516915321:role/graph-rag-ecs-task-execution",
             "containerDefinitions": [
               {
-                "name": "graphrag-app",
+                "name": "app-container",
                 "image": "${{ secrets.DOCKER_USERNAME }}/graphrag-hackathon:${{ github.sha }}",
                 "essential": true,
                 "portMappings": [
@@ -78,8 +78,8 @@ jobs:
                 "logConfiguration": {
                   "logDriver": "awslogs",
                   "options": {
-                    "awslogs-group": "/ecs/graphrag-hackathon",
-                    "awslogs-region": "${{ secrets.AWS_REGION }}",
+                    "awslogs-group": "/ecs/graph-rag",
+                    "awslogs-region": "eu-central-1",
                     "awslogs-stream-prefix": "ecs"
                   }
                 }
@@ -93,19 +93,17 @@ jobs:
         run: |
           TASK_DEF_ARN=$(aws ecs register-task-definition \
             --cli-input-json file://task-definition.json \
+            --region eu-central-1 \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
           echo "task_definition_arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
 
       - name: Deploy to ECS Fargate
-        env:
-          ECS_CLUSTER: ${{ secrets.ECS_CLUSTER_NAME }}
-          ECS_SERVICE: ${{ secrets.ECS_SERVICE_NAME }}
         run: |
           # Update ECS service with new image
           aws ecs update-service \
-            --cluster $ECS_CLUSTER \
-            --service $ECS_SERVICE \
+            --cluster graph-rag-cluster \
+            --service graph-rag-service \
             --task-definition ${{ steps.task-def.outputs.task_definition_arn }} \
             --force-new-deployment \
-            --region ${{ secrets.AWS_REGION }}
+            --region eu-central-1
