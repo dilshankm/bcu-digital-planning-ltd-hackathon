@@ -42,8 +42,10 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 # Copy your app code
 COPY . .
 
-# Fix permissions
-RUN chown -R appuser:appuser /app
+# Create DSPy cache directory and fix all permissions
+RUN mkdir -p /home/appuser/.dspy_cache && \
+    chown -R appuser:appuser /app /home/appuser/.dspy_cache
+
 USER appuser
 
 EXPOSE 8080
