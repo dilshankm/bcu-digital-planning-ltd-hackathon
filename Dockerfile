@@ -35,16 +35,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Create app directory and user
+# Create app directory and user WITH home directory
 WORKDIR /app
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+RUN groupadd -r appuser && \
+    useradd -r -g appuser -m -d /home/appuser appuser
 
 # Copy your app code
 COPY . .
 
 # Create DSPy cache directory and fix all permissions
 RUN mkdir -p /home/appuser/.dspy_cache && \
-    chown -R appuser:appuser /app /home/appuser/.dspy_cache
+    chown -R appuser:appuser /app /home/appuser
 
 USER appuser
 
