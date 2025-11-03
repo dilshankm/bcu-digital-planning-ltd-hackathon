@@ -36,57 +36,57 @@ jobs:
           tags: ${{ secrets.DOCKER_USERNAME }}/graphrag-hackathon:latest,${{ secrets.DOCKER_USERNAME }}/graphrag-hackathon:${{ github.sha }}
 
       - name: Create ECS task definition
+        env:
+          DOCKER_IMAGE: ${{ secrets.DOCKER_USERNAME }}/graphrag-hackathon:${{ github.sha }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          NEO4J_URI: ${{ secrets.NEO4J_URI }}
+          NEO4J_USERNAME: ${{ secrets.NEO4J_USERNAME }}
+          NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
         run: |
-          cat > task-definition.json <<EOF
-          {
-            "family": "graph-rag-task",
-            "networkMode": "awsvpc",
-            "requiresCompatibilities": ["FARGATE"],
-            "cpu": "256",
-            "memory": "512",
-            "executionRoleArn": "arn:aws:iam::223516915321:role/graph-rag-ecs-task-execution",
-            "taskRoleArn": "arn:aws:iam::223516915321:role/graph-rag-ecs-task-execution",
-            "containerDefinitions": [
-              {
-                "name": "app-container",
-                "image": "${{ secrets.DOCKER_USERNAME }}/graphrag-hackathon:${{ github.sha }}",
-                "essential": true,
-                "portMappings": [
-                  {
+          python - <<'PY'
+import json
+import os
+
+task_definition = {
+    "family": "graph-rag-task",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": ["FARGATE"],
+    "cpu": "256",
+    "memory": "512",
+    "executionRoleArn": "arn:aws:iam::223516915321:role/graph-rag-ecs-task-execution",
+    "taskRoleArn": "arn:aws:iam::223516915321:role/graph-rag-ecs-task-execution",
+    "containerDefinitions": [
+        {
+            "name": "app-container",
+            "image": os.environ["DOCKER_IMAGE"],
+            "essential": True,
+            "portMappings": [
+                {
                     "containerPort": 8080,
                     "protocol": "tcp"
-                  }
-                ],
-                "environment": [
-                  {
-                    "name": "OPENAI_API_KEY",
-                    "value": "${{ secrets.OPENAI_API_KEY }}"
-                  },
-                  {
-                    "name": "NEO4J_URI",
-                    "value": "${{ secrets.NEO4J_URI }}"
-                  },
-                  {
-                    "name": "NEO4J_USERNAME",
-                    "value": "${{ secrets.NEO4J_USERNAME }}"
-                  },
-                  {
-                    "name": "NEO4J_PASSWORD",
-                    "value": "${{ secrets.NEO4J_PASSWORD }}"
-                  }
-                ],
-                "logConfiguration": {
-                  "logDriver": "awslogs",
-                  "options": {
+                }
+            ],
+            "environment": [
+                {"name": "OPENAI_API_KEY", "value": os.environ["OPENAI_API_KEY"]},
+                {"name": "NEO4J_URI", "value": os.environ["NEO4J_URI"]},
+                {"name": "NEO4J_USERNAME", "value": os.environ["NEO4J_USERNAME"]},
+                {"name": "NEO4J_PASSWORD", "value": os.environ["NEO4J_PASSWORD"]}
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
                     "awslogs-group": "/ecs/graph-rag",
                     "awslogs-region": "eu-central-1",
                     "awslogs-stream-prefix": "ecs"
-                  }
                 }
-              }
-            ]
-          }
-          EOF
+            }
+        }
+    ]
+}
+
+with open("task-definition.json", "w", encoding="utf-8") as f:
+    json.dump(task_definition, f)
+PY
 
       - name: Register ECS task definition
         id: task-def
