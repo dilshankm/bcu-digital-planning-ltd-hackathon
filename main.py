@@ -16,6 +16,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "https://d1vhufjc9w8vpb.cloudfront.net",
+        "http://graph-rag-alb-890224410.eu-central-1.elb.amazonaws.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
