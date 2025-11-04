@@ -1,9 +1,7 @@
 from graph.state import GraphState
 from services.neo4j_service import Neo4jService
 from services.llm_service import LLMService
-from services.vector_store_service import VectorStoreService  # Keep as fallback
-from services.neo4j_vector_store_service import Neo4jVectorStoreService  # Neo4j native (mentor's approach)
-from services.langchain_rag_service import LangChainRAGService  # LangChain RAG (mentor's exact approach)
+from services.neo4j_vector_store_service import Neo4jVectorStoreService  # Neo4j native vector search
 from services.embedding_service import EmbeddingService
 from services.dspy_service import DSPyService
 from services.conversation_service import conversation_service
@@ -11,11 +9,8 @@ from services.conversation_service import conversation_service
 
 neo4j_service = Neo4jService()
 llm_service = LLMService()
-# Use LangChain RAG (mentor's exact approach) as primary
-langchain_rag_service = LangChainRAGService()
-# Use Neo4j native vector store (like mentor's notebooks) as secondary
+# Use Neo4j native vector store for similarity search
 neo4j_vector_service = Neo4jVectorStoreService()
-vector_service = VectorStoreService()  # Fallback if Neo4j vector index not available
 embedding_service = EmbeddingService()
 dspy_service = DSPyService()
 
@@ -80,8 +75,7 @@ def interpret_results(state: GraphState) -> GraphState:
 
 
 def ensure_vector_index(state: GraphState) -> GraphState:
-    """Bootstrap the vector index from Neo4j nodes if empty (using Neo4j native vector index like mentor)."""
-    # Use Neo4j native vector store (like mentor's notebooks)
+    """Bootstrap the vector index from Neo4j nodes if empty (Neo4j native, no LangChain)."""
     try:
         count = neo4j_vector_service.count()
         if count == 0:
@@ -89,11 +83,7 @@ def ensure_vector_index(state: GraphState) -> GraphState:
             # Bootstrap with small batch to avoid token limits
             neo4j_vector_service.upsert_nodes(nodes[:10])
     except Exception as e:
-        # Fallback to Chroma if Neo4j vector index not available
-        print(f"⚠️  Neo4j vector index not available, using Chroma fallback: {e}")
-        if vector_service.collection.count() == 0:
-            nodes = neo4j_service.fetch_all_nodes()
-            vector_service.upsert_nodes(nodes[:10])
+        print(f"⚠️  Vector index setup failed: {e}")
     return state
 
 
@@ -105,30 +95,13 @@ def embed_question(state: GraphState) -> GraphState:
 
 
 def similarity_search(state: GraphState) -> GraphState:
-    # Use LangChain Neo4jVector similarity search (like mentor's notebooks)
+    # Use Neo4j native vector search (no LangChain)
     try:
-        hits = langchain_rag_service.similarity_search(state["question"], top_k=3)
-        # Convert LangChain format to our format
-        formatted_hits = []
-        for hit in hits:
-            formatted_hits.append({
-                "id": hit.get("id"),
-                "score": hit.get("score", 0.0),
-                "label": hit.get("metadata", {}).get("label", "Node"),
-                "properties": hit.get("metadata", {})
-            })
-        state["similar_nodes"] = formatted_hits
+        hits = neo4j_vector_service.similarity_search(state["question"], top_k=3)
+        state["similar_nodes"] = hits
     except Exception as e:
-        print(f"⚠️  LangChain similarity search failed, using Neo4j fallback: {e}")
-        # Fallback to Neo4j native vector search
-        try:
-            hits = neo4j_vector_service.similarity_search(state["question"], top_k=3)
-            state["similar_nodes"] = hits
-        except Exception as e2:
-            # Final fallback to Chroma
-            print(f"⚠️  Neo4j vector search failed, using Chroma fallback: {e2}")
-            hits = vector_service.similarity_search(state["question"], top_k=3)
-            state["similar_nodes"] = hits
+        print(f"⚠️  Vector search failed: {e}")
+        state["similar_nodes"] = []
     return state
 
 
@@ -226,56 +199,36 @@ def cypher_agent(state: GraphState) -> GraphState:
 
 
 def synthesizer_agent(state: GraphState) -> GraphState:
-    """Use LangChain GraphCypherQAChain (exactly like mentor's Lesson 7)"""
-    print("\n🎨 [SYNTHESIZER AGENT] Using LangChain GraphCypherQAChain (mentor's approach)...")
+    """Synthesize final answer using LLM (pure LangGraph, no LangChain)"""
+    print("\n🎨 [SYNTHESIZER AGENT] Synthesizing answer...")
     question = state["question"]
     context = state.get("context", "")
     results = state.get("neo4j_results", [])
+    cypher_query = state.get("cypher_query", "")
     
-    # Use LangChain GraphCypherQAChain as primary (like mentor's Lesson 7)
-    try:
-        # GraphCypherQAChain generates Cypher and executes it automatically
-        answer = langchain_rag_service.answer_with_cypher(question)
-        
-        # If GraphCypherQAChain doesn't return good answer, supplement with vector search
-        if not answer or len(answer) < 50:
-            print("   ⚠️  GraphCypherQAChain answer too short, supplementing with vector search...")
-            rag_result = langchain_rag_service.answer_with_sources(question)
-            if rag_result.get("answer"):
-                answer = rag_result["answer"]
-        
-        # If still empty, use Cypher results
-        if not answer or len(answer) < 50:
-            if results:
-                answer = llm_service.interpret_results(question, results[:5])
-        
-        state["final_answer"] = answer
-        print(f"   ✅ LangChain GraphCypherQAChain answer generated!")
-    except Exception as e:
-        # Fallback to DSPy if LangChain fails
-        print(f"⚠️  LangChain GraphCypherQAChain failed, using DSPy fallback: {e}")
-        
-        # Limit results to first 10 items and truncate each
-        limited_results = []
-        for r in results[:10]:
-            if isinstance(r, dict):
-                limited_r = {k: str(v)[:100] if len(str(v)) > 100 else v for k, v in r.items()}
-                limited_results.append(limited_r)
-            else:
-                limited_results.append(str(r)[:200])
-        
-        truncated_context = context[:3000] if len(context) > 3000 else context
-        
-        if truncated_context or limited_results:
-            results_str = str(limited_results)[:2000]
-            composite_context = f"Context:\n{truncated_context}\n\nResults:\n{results_str}"
-            answer = dspy_service.answer(question, composite_context)
+    # Build comprehensive context from graph results and subgraph
+    limited_results = []
+    for r in results[:10]:
+        if isinstance(r, dict):
+            limited_r = {k: str(v)[:100] if len(str(v)) > 100 else v for k, v in r.items()}
+            limited_results.append(limited_r)
         else:
-            answer = llm_service.interpret_results(question, limited_results)
-        
-        state["final_answer"] = answer
-        print(f"   ✅ DSPy fallback answer generated!")
+            limited_results.append(str(r)[:200])
     
+    truncated_context = context[:3000] if len(context) > 3000 else context
+    
+    # Use DSPy multi-agent synthesis or simple LLM interpretation
+    if truncated_context or limited_results:
+        results_str = str(limited_results)[:2000]
+        composite_context = f"Graph Context:\n{truncated_context}\n\nQuery Results:\n{results_str}"
+        if cypher_query:
+            composite_context = f"Cypher Query: {cypher_query}\n\n{composite_context}"
+        answer = dspy_service.answer(question, composite_context)
+    else:
+        answer = llm_service.interpret_results(question, limited_results)
+    
+    state["final_answer"] = answer
+    print(f"   ✅ Answer synthesized!")
     return state
 
 
