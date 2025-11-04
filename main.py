@@ -30,7 +30,8 @@ async def root():
 @app.post("/ask")
 async def ask_question(q: Question):
     """Ask a question about the healthcare data"""
-
+    import asyncio
+    
     # Initialize state
     initial_state = {
         "question": q.question,
@@ -50,12 +51,30 @@ async def ask_question(q: Question):
         "confidence": 0.0
     }
 
-    # Run the graph
-    result = graph.invoke(initial_state)
-
-    return {
-        "question": result["question"],
-        "cypher_query": result["cypher_query"],
-        "answer": result["final_answer"],
-        "error": result.get("error", "")
-    }
+    try:
+        # Run the graph with timeout (60 seconds)
+        result = await asyncio.wait_for(
+            asyncio.to_thread(graph.invoke, initial_state),
+            timeout=60.0
+        )
+        
+        return {
+            "question": result["question"],
+            "cypher_query": result["cypher_query"],
+            "answer": result["final_answer"],
+            "error": result.get("error", "")
+        }
+    except asyncio.TimeoutError:
+        return {
+            "question": q.question,
+            "cypher_query": "",
+            "answer": "Request timed out. The query may be too complex. Please try a simpler question.",
+            "error": "Timeout: Query exceeded 60 second limit"
+        }
+    except Exception as e:
+        return {
+            "question": q.question,
+            "cypher_query": "",
+            "answer": "",
+            "error": str(e)
+        }

@@ -90,7 +90,8 @@ def embed_question(state: GraphState) -> GraphState:
 
 
 def similarity_search(state: GraphState) -> GraphState:
-    hits = vector_service.similarity_search(state["question"], top_k=5)
+    # Reduce to 3 nodes to limit context size
+    hits = vector_service.similarity_search(state["question"], top_k=3)
     state["similar_nodes"] = hits
     return state
 
@@ -100,7 +101,13 @@ def expand_traversal(state: GraphState) -> GraphState:
     if not node_ids:
         state["subgraph"] = {"nodes": [], "relationships": []}
         return state
+    # Reduce depth to 1 and limit expansion
     subgraph = neo4j_service.expand_subgraph(node_ids, depth=1)
+    # Limit subgraph size
+    if "nodes" in subgraph:
+        subgraph["nodes"] = subgraph["nodes"][:20]
+    if "relationships" in subgraph:
+        subgraph["relationships"] = subgraph["relationships"][:30]
     state["subgraph"] = subgraph
     return state
 
@@ -109,15 +116,24 @@ def build_subgraph_context(state: GraphState) -> GraphState:
     subgraph = state.get("subgraph", {"nodes": [], "relationships": []})
     parts = []
     parts.append("NODES:")
-    for n in subgraph.get("nodes", []):
+    # Limit to 20 nodes max to prevent context overflow
+    nodes = subgraph.get("nodes", [])[:20]
+    for n in nodes:
         label = n.get("label")
         properties = n.get("properties", {})
-        kv = ", ".join(f"{k}={v}" for k, v in properties.items())
+        # Limit properties to first 3 key-value pairs
+        kv_items = list(properties.items())[:3]
+        kv = ", ".join(f"{k}={str(v)[:30]}" for k, v in kv_items)  # Truncate values
         parts.append(f"- ({n.get('id')}:{label} {{ {kv} }})")
     parts.append("RELATIONSHIPS:")
-    for r in subgraph.get("relationships", []):
+    # Limit to 30 relationships max
+    relationships = subgraph.get("relationships", [])[:30]
+    for r in relationships:
         parts.append(f"- ({r.get('start')})-[:{r.get('type')}]->({r.get('end')})")
     context = "\n".join(parts)
+    # Truncate total context to 4000 chars (roughly 1000 tokens)
+    if len(context) > 4000:
+        context = context[:4000] + "... (truncated)"
     state["context"] = context
     return state
 
@@ -171,11 +187,26 @@ def synthesizer_agent(state: GraphState) -> GraphState:
     question = state["question"]
     context = state.get("context", "")
     results = state.get("neo4j_results", [])
-    if context or results:
-        composite_context = f"Context:\n{context}\n\nResults:\n{results}"
+    
+    # Limit results to first 10 items and truncate each
+    limited_results = []
+    for r in results[:10]:
+        if isinstance(r, dict):
+            # Truncate each value in result dict
+            limited_r = {k: str(v)[:100] if len(str(v)) > 100 else v for k, v in r.items()}
+            limited_results.append(limited_r)
+        else:
+            limited_results.append(str(r)[:200])
+    
+    # Truncate context to 3000 chars (safe for gpt-3.5-turbo)
+    truncated_context = context[:3000] if len(context) > 3000 else context
+    
+    if truncated_context or limited_results:
+        results_str = str(limited_results)[:2000]  # Limit results string
+        composite_context = f"Context:\n{truncated_context}\n\nResults:\n{results_str}"
         answer = dspy_service.answer(question, composite_context)
     else:
-        answer = llm_service.interpret_results(question, results)
+        answer = llm_service.interpret_results(question, limited_results)
     state["final_answer"] = answer
     print(f"   ✅ Final answer generated!")
     return state
