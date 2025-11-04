@@ -7,7 +7,17 @@ from graph.workflow import graph
 from services.conversation_service import conversation_service
 from services.neo4j_service import Neo4jService
 from services.csv_import_service import CSVImportService
-from fastapi import UploadFile, File
+# Import UploadFile conditionally to avoid startup crash if python-multipart missing
+try:
+    from fastapi import UploadFile, File
+    MULTIPART_AVAILABLE = True
+except ImportError:
+    MULTIPART_AVAILABLE = False
+    # Dummy classes for type hints
+    class UploadFile:
+        pass
+    class File:
+        pass
 
 app = FastAPI(title="Healthcare GraphRAG API")
 
