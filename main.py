@@ -126,7 +126,14 @@ async def ask_question(q: Question, response: Response):
             "cypher_query": result.get("cypher_query", ""),
             "answer": result["final_answer"],
             "error": result.get("error", ""),
-            "session_id": session_id
+            "session_id": session_id,
+            # Stretch Goals: Visualization and Explainability
+            "traversal_paths": result.get("subgraph", {}).get("relationships", []),
+            "nodes_used": result.get("subgraph", {}).get("nodes", []),
+            "similar_nodes_found": result.get("similar_nodes", []),
+            "plan": result.get("plan", ""),
+            "steps_taken": result.get("step", 0),
+            "confidence": result.get("confidence", 0.0)
         }
     except asyncio.TimeoutError:
         error_msg = "Request timed out. The query may be too complex. Please try a simpler question."
