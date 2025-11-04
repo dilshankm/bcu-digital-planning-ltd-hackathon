@@ -1,7 +1,8 @@
 from graph.state import GraphState
 from services.neo4j_service import Neo4jService
 from services.llm_service import LLMService
-from services.vector_store_service import VectorStoreService
+from services.vector_store_service import VectorStoreService  # Keep as fallback
+from services.neo4j_vector_store_service import Neo4jVectorStoreService  # Neo4j native (mentor's approach)
 from services.embedding_service import EmbeddingService
 from services.dspy_service import DSPyService
 from services.conversation_service import conversation_service
@@ -9,7 +10,9 @@ from services.conversation_service import conversation_service
 
 neo4j_service = Neo4jService()
 llm_service = LLMService()
-vector_service = VectorStoreService()
+# Use Neo4j native vector store (like mentor's notebooks) as primary
+neo4j_vector_service = Neo4jVectorStoreService()
+vector_service = VectorStoreService()  # Fallback if Neo4j vector index not available
 embedding_service = EmbeddingService()
 dspy_service = DSPyService()
 
@@ -74,12 +77,20 @@ def interpret_results(state: GraphState) -> GraphState:
 
 
 def ensure_vector_index(state: GraphState) -> GraphState:
-    """Bootstrap the vector index from Neo4j nodes if empty."""
-    # If collection has no items, populate
-    if vector_service.collection.count() == 0:
-        nodes = neo4j_service.fetch_all_nodes()
-        # Very strict initial bootstrap to avoid token limits
-        vector_service.upsert_nodes(nodes[:10])
+    """Bootstrap the vector index from Neo4j nodes if empty (using Neo4j native vector index like mentor)."""
+    # Use Neo4j native vector store (like mentor's notebooks)
+    try:
+        count = neo4j_vector_service.count()
+        if count == 0:
+            nodes = neo4j_service.fetch_all_nodes()
+            # Bootstrap with small batch to avoid token limits
+            neo4j_vector_service.upsert_nodes(nodes[:10])
+    except Exception as e:
+        # Fallback to Chroma if Neo4j vector index not available
+        print(f"⚠️  Neo4j vector index not available, using Chroma fallback: {e}")
+        if vector_service.collection.count() == 0:
+            nodes = neo4j_service.fetch_all_nodes()
+            vector_service.upsert_nodes(nodes[:10])
     return state
 
 
@@ -91,8 +102,13 @@ def embed_question(state: GraphState) -> GraphState:
 
 
 def similarity_search(state: GraphState) -> GraphState:
-    # Reduce to 3 nodes to limit context size
-    hits = vector_service.similarity_search(state["question"], top_k=3)
+    # Use Neo4j native vector search (like mentor's notebooks)
+    try:
+        hits = neo4j_vector_service.similarity_search(state["question"], top_k=3)
+    except Exception as e:
+        # Fallback to Chroma if Neo4j vector index not available
+        print(f"⚠️  Neo4j vector search failed, using Chroma fallback: {e}")
+        hits = vector_service.similarity_search(state["question"], top_k=3)
     state["similar_nodes"] = hits
     return state
 
