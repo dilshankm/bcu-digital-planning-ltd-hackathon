@@ -53,10 +53,17 @@ def generate_cypher(state: GraphState) -> GraphState:
 def execute_neo4j_query(state: GraphState) -> GraphState:
     """Execute Cypher query against Neo4j"""
     try:
-        results = neo4j_service.execute_query(state["cypher_query"])
+        cypher = state.get("cypher_query", "")
+        if not cypher:
+            print("   ⚠️  No Cypher query to execute.")
+            return state
+        print(f"   🔍 Executing Cypher query...")
+        results = neo4j_service.execute_query(cypher)
         state["neo4j_results"] = results
+        print(f"   ✅ Query executed. Found {len(results)} results.")
     except Exception as e:
         state["error"] = str(e)
+        print(f"   ❌ Query execution failed: {e}")
     return state
 
 
@@ -217,15 +224,69 @@ def synthesizer_agent(state: GraphState) -> GraphState:
     
     truncated_context = context[:3000] if len(context) > 3000 else context
     
+    # If no results, provide a helpful message (user-friendly, no Cypher mention)
+    if not results or len(results) == 0:
+        answer = (
+            f"I couldn't find any information matching your question: '{question}'\n\n"
+            f"This might mean:\n"
+            f"- No patients or records match the specific criteria you're looking for\n"
+            f"- The search terms might need to be adjusted (e.g., try broader terms)\n"
+            f"- The data might not be available in the database"
+        )
+        state["final_answer"] = answer
+        print(f"   ⚠️  No results found. Providing helpful message.")
+        return state
+    
     # Use DSPy multi-agent synthesis or simple LLM interpretation
     if truncated_context or limited_results:
         results_str = str(limited_results)[:2000]
-        composite_context = f"Graph Context:\n{truncated_context}\n\nQuery Results:\n{results_str}"
-        if cypher_query:
-            composite_context = f"Cypher Query: {cypher_query}\n\n{composite_context}"
-        answer = dspy_service.answer(question, composite_context)
+        # Don't include Cypher query in context - it's not user-friendly
+        # Don't use technical terms like "Query Results" - just provide the data
+        composite_context = f"Available Information:\n{truncated_context}\n\nData:\n{results_str}"
+        
+        # Generate answer using DSPy or LLM
+        try:
+            answer = dspy_service.answer(question, composite_context)
+            # Check if answer is placeholder-like or empty
+            if not answer or len(answer.strip()) < 20 or "enhance the draft" in answer.lower() or "to enhance" in answer.lower() or "cypher" in answer.lower():
+                # Fallback to LLM interpretation if DSPy returns placeholder or mentions Cypher
+                print(f"   ⚠️  DSPy returned placeholder text or mentioned Cypher. Using LLM fallback.")
+                answer = llm_service.interpret_results(question, limited_results)
+        except Exception as e:
+            print(f"   ⚠️  DSPy failed: {e}. Using LLM fallback.")
+            answer = llm_service.interpret_results(question, limited_results)
     else:
         answer = llm_service.interpret_results(question, limited_results)
+    
+    # Ensure answer is not empty and doesn't contain technical jargon
+    if not answer or len(answer.strip()) < 10:
+        answer = f"I found {len(results)} matching records, but I'm having trouble summarizing them. Please try rephrasing your question or asking for more specific information."
+    
+    # AGGRESSIVE filter for technical terms that users shouldn't see
+    banned_phrases = [
+        "graph context", "graph", "cypher query", "cypher", "database query", 
+        "query results", "the query", "nodes", "relationships", "neo4j",
+        "based on the", "according to the", "the data shows", "the information shows",
+        "in the context", "from the context"
+    ]
+    answer_lower = answer.lower()
+    for phrase in banned_phrases:
+        if phrase in answer_lower:
+            # Try to clean up the answer
+            if phrase == "graph context":
+                answer = answer.replace("graph context", "system")
+                answer = answer.replace("Graph context", "system")
+            elif phrase in ["cypher query", "cypher"]:
+                answer = answer.replace("cypher query", "system").replace("Cypher query", "system")
+                answer = answer.replace("cypher", "").replace("Cypher", "")
+            elif phrase in ["the query", "query results", "database query"]:
+                answer = answer.replace("query results", "results").replace("Query results", "Results")
+                answer = answer.replace("the query", "the search").replace("The query", "The search")
+            # If too many technical terms, fall back to simple LLM interpretation
+            if sum(1 for p in banned_phrases[:7] if p in answer_lower) >= 2:
+                print(f"   ⚠️  Answer contains too many technical terms. Re-generating with strict prompt.")
+                answer = llm_service.interpret_results(question, limited_results)
+                break
     
     state["final_answer"] = answer
     print(f"   ✅ Answer synthesized!")
@@ -260,10 +321,18 @@ def refine_query(state: GraphState) -> GraphState:
             f"Original question: {question}\n\n"
             f"Analyze why this query might have failed and suggest an improved query "
             f"that is more likely to return results. Consider:\n"
-            f"- Syntax errors: After WITH/aggregation, you cannot reference variables from before\n"
-            f"- Use proper Cypher syntax: aggregate in WITH, then filter in WHERE\n"
-            f"- For multiple conditions: MATCH (p:Patient)-[:HAS_CONDITION]->(c:Condition) WITH p, count(c) as conditionCount WHERE conditionCount > 1\n"
+            f"- Syntax errors: After WITH/aggregation, you cannot reference variables from before the WITH clause\n"
+            f"- CRITICAL: When using multiple WITH clauses, you must include ALL variables you need in each WITH\n"
+            f"- If you use collect() or count() on a variable, include it in WITH: WITH p, count(c) as conditionCount, collect(c.description) as conditions\n"
+            f"- Example CORRECT: MATCH (p:Patient)-[:HAS_CONDITION]->(c:Condition) WITH p, count(c) as conditionCount, collect(c.description) as conditions WHERE conditionCount > 1 RETURN p.firstName, p.lastName, conditions\n"
+            f"- Example WRONG: WITH p, count(c) as conditionCount WHERE conditionCount > 1 RETURN collect(c.description) (c is not available after WITH)\n"
+            f"- CRITICAL FIX FOR 'Variable c not defined': Move collect(c.description) INTO the WITH clause, not the RETURN clause\n"
+            f"- If error mentions 'Variable `c` not defined', change: WITH p, count(c) as count ... RETURN collect(c.description) TO: WITH p, count(c) as count, collect(c.description) as descriptions ... RETURN descriptions\n"
+            f"- For multiple conditions: MATCH (p:Patient)-[:HAS_CONDITION]->(c:Condition) WITH p, count(c) as conditionCount WHERE conditionCount > 1 RETURN p\n"
             f"- For expensive treatments: Check Encounter.totalCost or Procedure baseCost\n"
+            f"- TEXT MATCHING: Use CONTAINS for partial text matching, not exact match {{description: \"value\"}}\n"
+            f"- Example: WHERE c.description CONTAINS 'Diabetes' (not {{description: \"Diabetes\"}})\n"
+            f"- Use case-insensitive matching: toLower(c.description) CONTAINS toLower('diabetes')\n"
             f"- Relaxing WHERE constraints if needed\n"
             f"- Expanding relationship patterns\n"
         )
@@ -313,6 +382,7 @@ def planner_decide(state: GraphState) -> GraphState:
     cypher = state.get("cypher_query", "")
     results = state.get("neo4j_results", [])
     refinement_count = state.get("refinement_count", 0)
+    error = state.get("error", "")
 
     # Heuristic policy for autonomous routing
     if not context:
@@ -321,22 +391,26 @@ def planner_decide(state: GraphState) -> GraphState:
     elif not cypher:
         decision = "query"
         rationale = "Have context but no Cypher; generate Cypher next."
-    elif cypher and (results is None or len(results) == 0) and refinement_count < 2:
-        # Try refinement if we have a query but no results
-        decision = "refine"
-        rationale = "Have Cypher but no results; try refining the query."
-        state["refinement_count"] = refinement_count + 1
     elif cypher and (results is None or len(results) == 0):
-        decision = "execute"
-        rationale = "Have Cypher but no results; execute query (refinement already attempted)."
+        # Check if we should refine or execute
+        if refinement_count < 1 and error:
+            # Only refine if there was an error and we haven't refined yet
+            decision = "refine"
+            rationale = "Have Cypher but error occurred; try refining the query."
+            state["refinement_count"] = refinement_count + 1
+        else:
+            # Execute query first before trying refinement
+            decision = "execute"
+            rationale = "Have Cypher but no results; execute query first."
     elif len(results) > 0 and refinement_count == 0 and len(results) > 100:
         # Too many results - refine
         decision = "refine"
         rationale = "Too many results; refine query to be more specific."
         state["refinement_count"] = refinement_count + 1
-    elif cypher and (results is None or len(results) == 0):
-        decision = "execute"
-        rationale = "Have Cypher but no results; execute query."
+    elif cypher and len(results) > 0:
+        # Have results - synthesize answer
+        decision = "answer"
+        rationale = "Have context and results; synthesize final answer."
     else:
         decision = "answer"
         rationale = "Have context and results; synthesize final answer."

@@ -23,21 +23,21 @@ class DSPyService:
             plan = dspy.OutputField()
 
         class AnalystSignature(dspy.Signature):
-            """Draft a factual answer strictly grounded in the graph context and plan."""
+            """Draft a user-friendly answer using ONLY the data provided. BANNED WORDS: Cypher, query, database, graph, nodes, relationships, context, "based on", "according to", "shows", "indicates". Answer like you naturally know this - just state the fact directly. Example GOOD: "There are 109 patients." Example BAD: "The number of patients in the graph context is 109." Start with the number or fact immediately."""
             question = dspy.InputField()
             context = dspy.InputField()
             plan = dspy.InputField()
             draft = dspy.OutputField()
 
         class CriticSignature(dspy.Signature):
-            """Review the draft for correctness, missing links, and clarity; list issues."""
+            """Review the draft. Check: (1) Does it use FORBIDDEN technical words like graph, query, database, Cypher, nodes, context? (2) Does it say "based on" or "according to"? (3) Does it invent facts not in context? (4) Is it direct and simple? List all issues."""
             question = dspy.InputField()
             context = dspy.InputField()
             draft = dspy.InputField()
             critique = dspy.OutputField()
 
         class ImproveSignature(dspy.Signature):
-            """Produce an improved final answer that addresses the critique and remains faithful to context."""
+            """Produce a clean, simple final answer. ABSOLUTELY FORBIDDEN WORDS: Cypher, query, database, graph, nodes, context, "based on", "according to", "the data shows". Answer like a human who naturally knows this information. Example GOOD: "There are 109 patients." Example BAD: "The number of patients in the graph context is 109." Just state facts directly. No explanations of where data came from."""
             question = dspy.InputField()
             context = dspy.InputField()
             draft = dspy.InputField()
