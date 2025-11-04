@@ -15,6 +15,7 @@ from graph.nodes import (
     synthesizer_agent,
     planner_decide,
     router_next_action,
+    refine_query,
 )
 
 
@@ -37,6 +38,7 @@ def create_workflow():
     workflow.add_node("planner_decide", planner_decide)
     workflow.add_node("retriever_agent", retriever_agent)
     workflow.add_node("cypher_agent", cypher_agent)
+    workflow.add_node("refine_query", refine_query)
     workflow.add_node("synthesizer_agent", synthesizer_agent)
 
     workflow.set_entry_point("planner_decide")
@@ -46,6 +48,7 @@ def create_workflow():
         {
             "retriever_agent": "retriever_agent",
             "cypher_agent": "cypher_agent",
+            "refine_query": "refine_query",
             "execute_query": "execute_query",
             "synthesizer_agent": "synthesizer_agent",
             "END": END,
@@ -55,6 +58,7 @@ def create_workflow():
     # Loop back to planner after each action for agentic iteration
     workflow.add_edge("retriever_agent", "planner_decide")
     workflow.add_edge("cypher_agent", "planner_decide")
+    workflow.add_edge("refine_query", "planner_decide")
     workflow.add_edge("execute_query", "planner_decide")
     # synthesizer_agent ends the flow via conditional mapping when planner decides "end"
     workflow.add_edge("synthesizer_agent", END)

@@ -4,6 +4,7 @@ from services.llm_service import LLMService
 from services.vector_store_service import VectorStoreService
 from services.embedding_service import EmbeddingService
 from services.dspy_service import DSPyService
+from services.conversation_service import conversation_service
 
 
 neo4j_service = Neo4jService()
@@ -174,8 +175,16 @@ def cypher_agent(state: GraphState) -> GraphState:
     print("\n💾 [CYPHER AGENT] Generating Cypher query...")
     question = state["question"]
     context = state.get("context", "")
+    conversation_history = state.get("conversation_history", "")
+    
+    # Include conversation history if available
+    if conversation_history:
+        question_with_history = f"Previous conversation:\n{conversation_history}\n\nCurrent question: {question}"
+    else:
+        question_with_history = question
+    
     augmented_schema = f"{SCHEMA}\n\nContext:\n{context}"
-    cypher_query = llm_service.generate_cypher(question, augmented_schema)
+    cypher_query = llm_service.generate_cypher(question_with_history, augmented_schema)
     state["cypher_query"] = cypher_query
     print(f"   ✅ Generated: {cypher_query[:100]}...")
     return state
@@ -218,6 +227,54 @@ def _append_message(state: GraphState, role: str, content: str) -> None:
     state["messages"] = msgs
 
 
+def refine_query(state: GraphState) -> GraphState:
+    """Query refinement agent: analyzes results and improves query if needed"""
+    print("\n🔄 [REFINEMENT AGENT] Analyzing results to refine query...")
+    question = state.get("question", "")
+    cypher = state.get("cypher_query", "")
+    results = state.get("neo4j_results", [])
+    context = state.get("context", "")
+    
+    if not cypher:
+        print("   ⏭️  No query to refine. Skipping.")
+        return state
+    
+    # Check if results are empty or too few
+    if len(results) == 0:
+        refinement_prompt = (
+            f"The Cypher query returned no results:\n{cypher}\n\n"
+            f"Original question: {question}\n\n"
+            f"Analyze why this query might have failed and suggest an improved query "
+            f"that is more likely to return results. Consider:\n"
+            f"- Relaxing WHERE constraints\n"
+            f"- Checking for typos or incorrect property names\n"
+            f"- Using CONTAINS instead of exact matches\n"
+            f"- Expanding relationship patterns\n"
+        )
+        refined_cypher = llm_service.generate_cypher(refinement_prompt, SCHEMA)
+        state["cypher_query"] = refined_cypher
+        state["neo4j_results"] = []  # Reset to re-execute
+        print(f"   ✅ Refined query: {refined_cypher[:100]}...")
+        _append_message(state, "refiner", f"Refined query: {refined_cypher}")
+    elif len(results) > 100:
+        # Too many results - refine to be more specific
+        refinement_prompt = (
+            f"The query returned {len(results)} results, which is too many.\n"
+            f"Original query: {cypher}\n"
+            f"Question: {question}\n\n"
+            f"Suggest a more specific query with additional filters or constraints."
+        )
+        refined_cypher = llm_service.generate_cypher(refinement_prompt, SCHEMA)
+        state["cypher_query"] = refined_cypher
+        state["neo4j_results"] = []  # Reset to re-execute
+        print(f"   ✅ Refined query to be more specific: {refined_cypher[:100]}...")
+        _append_message(state, "refiner", f"Refined query for specificity: {refined_cypher}")
+    else:
+        print(f"   ✅ Results look good ({len(results)} items). No refinement needed.")
+    
+    return state
+
+
 def planner_decide(state: GraphState) -> GraphState:
     """Autonomous planner that decides next action and updates loop counters."""
     # Increment step and enforce budget
@@ -238,6 +295,7 @@ def planner_decide(state: GraphState) -> GraphState:
     context = state.get("context", "")
     cypher = state.get("cypher_query", "")
     results = state.get("neo4j_results", [])
+    refinement_count = state.get("refinement_count", 0)
 
     # Heuristic policy for autonomous routing
     if not context:
@@ -246,6 +304,19 @@ def planner_decide(state: GraphState) -> GraphState:
     elif not cypher:
         decision = "query"
         rationale = "Have context but no Cypher; generate Cypher next."
+    elif cypher and (results is None or len(results) == 0) and refinement_count < 2:
+        # Try refinement if we have a query but no results
+        decision = "refine"
+        rationale = "Have Cypher but no results; try refining the query."
+        state["refinement_count"] = refinement_count + 1
+    elif cypher and (results is None or len(results) == 0):
+        decision = "execute"
+        rationale = "Have Cypher but no results; execute query (refinement already attempted)."
+    elif len(results) > 0 and refinement_count == 0 and len(results) > 100:
+        # Too many results - refine
+        decision = "refine"
+        rationale = "Too many results; refine query to be more specific."
+        state["refinement_count"] = refinement_count + 1
     elif cypher and (results is None or len(results) == 0):
         decision = "execute"
         rationale = "Have Cypher but no results; execute query."
@@ -270,6 +341,7 @@ def router_next_action(state: GraphState) -> str:
     mapping = {
         "retrieve": "retriever_agent",
         "query": "cypher_agent",
+        "refine": "refine_query",
         "execute": "execute_query",
         "answer": "synthesizer_agent",
         "end": "END",

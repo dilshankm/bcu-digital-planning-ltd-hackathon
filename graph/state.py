@@ -1,4 +1,4 @@
-from typing import TypedDict, List, Dict, Any
+from typing import TypedDict, List, Dict, Any, Optional
 
 
 class GraphState(TypedDict):
@@ -17,3 +17,6 @@ class GraphState(TypedDict):
     max_steps: int
     decision: str
     confidence: float
+    session_id: Optional[str]  # For multi-turn conversations
+    conversation_history: Optional[str]  # Previous conversation context
+    refinement_count: int  # Track query refinement attempts

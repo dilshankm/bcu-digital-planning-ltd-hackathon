@@ -1,4 +1,5 @@
 from neo4j import GraphDatabase
+from typing import Dict
 
 from config import get_settings
 
@@ -11,9 +12,9 @@ class Neo4jService:
             auth=(settings.neo4j_username, settings.neo4j_password)
         )
 
-    def execute_query(self, cypher_query: str):
+    def execute_query(self, cypher_query: str, parameters: Dict = None):
         with self.driver.session() as session:
-            result = session.run(cypher_query)
+            result = session.run(cypher_query, parameters or {})
             return [record.data() for record in result]
 
     def fetch_all_nodes(self):
