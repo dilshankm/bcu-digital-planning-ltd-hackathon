@@ -215,13 +215,8 @@ def synthesizer_agent(state: GraphState) -> GraphState:
     
     # Build comprehensive context from graph results and subgraph
     # Increase limit to 50 for better patient listing
-    limited_results = []
-    for r in results[:50]:
-        if isinstance(r, dict):
-            limited_r = {k: str(v)[:100] if len(str(v)) > 100 else v for k, v in r.items()}
-            limited_results.append(limited_r)
-        else:
-            limited_results.append(str(r)[:200])
+    # Don't convert dicts to strings - preserve structure for LLM
+    limited_results = results[:50] if len(results) > 50 else results
     
     truncated_context = context[:3000] if len(context) > 3000 else context
     
@@ -238,26 +233,10 @@ def synthesizer_agent(state: GraphState) -> GraphState:
         print(f"   ⚠️  No results found. Providing helpful message.")
         return state
     
-    # Use DSPy multi-agent synthesis or simple LLM interpretation
-    if truncated_context or limited_results:
-        results_str = str(limited_results)[:2000]
-        # Don't include Cypher query in context - it's not user-friendly
-        # Don't use technical terms like "Query Results" - just provide the data
-        composite_context = f"Available Information:\n{truncated_context}\n\nData:\n{results_str}"
-        
-        # Generate answer using DSPy or LLM
-        try:
-            answer = dspy_service.answer(question, composite_context)
-            # Check if answer is placeholder-like or empty
-            if not answer or len(answer.strip()) < 20 or "enhance the draft" in answer.lower() or "to enhance" in answer.lower() or "cypher" in answer.lower():
-                # Fallback to LLM interpretation if DSPy returns placeholder or mentions Cypher
-                print(f"   ⚠️  DSPy returned placeholder text or mentioned Cypher. Using LLM fallback.")
-                answer = llm_service.interpret_results(question, limited_results)
-        except Exception as e:
-            print(f"   ⚠️  DSPy failed: {e}. Using LLM fallback.")
-            answer = llm_service.interpret_results(question, limited_results)
-    else:
-        answer = llm_service.interpret_results(question, limited_results)
+    # Use simple LLM interpretation directly - more reliable than DSPy multi-agent
+    # DSPy was too cautious and often returned vague/empty answers even with good data
+    print(f"   📊 Passing {len(limited_results)} results to LLM. Sample: {limited_results[:2] if limited_results else 'empty'}")
+    answer = llm_service.interpret_results(question, limited_results)
     
     # Ensure answer is not empty and doesn't contain technical jargon
     if not answer or len(answer.strip()) < 10:

@@ -15,7 +15,21 @@ class Neo4jService:
     def execute_query(self, cypher_query: str, parameters: Dict = None):
         with self.driver.session() as session:
             result = session.run(cypher_query, parameters or {})
-            return [record.data() for record in result]
+            records = []
+            for record in result:
+                data = {}
+                for key, value in record.items():
+                    # Convert Neo4j Node/Relationship objects to dicts
+                    if hasattr(value, '__dict__') and hasattr(value, '_properties'):
+                        # It's a Neo4j Node or Relationship
+                        data[key] = dict(value._properties)
+                    elif isinstance(value, list):
+                        # Handle lists (might contain Node objects)
+                        data[key] = [dict(v._properties) if hasattr(v, '_properties') else v for v in value]
+                    else:
+                        data[key] = value
+                records.append(data)
+            return records
 
     def fetch_all_nodes(self):
         query = (
