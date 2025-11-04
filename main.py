@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from services.langchain_rag_service import LangChainRAGService
+from graph.workflow import graph  # Use LangGraph workflow
 from services.conversation_service import conversation_service
 from services.neo4j_service import Neo4jService
 from services.csv_import_service import CSVImportService
@@ -20,9 +21,6 @@ except ImportError:
         pass
 
 app = FastAPI(title="Healthcare GraphRAG API")
-
-# Initialize LangChain RAG service (mentor's approach - Lesson 7)
-langchain_rag = LangChainRAGService()
 
 app.add_middleware(
     CORSMiddleware,
@@ -67,19 +65,43 @@ async def ask_question(q: Question):
             # If session creation fails, continue without session (single-turn mode)
             session_id = None
     
-    # Add user question to conversation if session exists
+    # Get conversation history if session exists
+    conversation_history = ""
     if session_id:
         try:
+            conversation_history = conversation_service.get_conversation_context(session_id, max_messages=5)
+            # Add user question to conversation
             conversation_service.add_message(session_id, "user", q.question)
         except Exception:
-            # If session fails, continue without session
+            # If session fails, continue without conversation history
             session_id = None
+    
+    # Initialize state for LangGraph workflow
+    initial_state = {
+        "question": q.question,
+        "cypher_query": "",
+        "neo4j_results": [],
+        "final_answer": "",
+        "error": "",
+        "query_embedding": [],
+        "similar_nodes": [],
+        "subgraph": {"nodes": [], "relationships": []},
+        "context": "",
+        "plan": "",
+        "messages": [],
+        "step": 0,
+        "max_steps": 6,
+        "decision": "",
+        "confidence": 0.0,
+        "session_id": session_id,
+        "conversation_history": conversation_history,
+        "refinement_count": 0
+    }
 
     try:
-        # Use LangChain GraphCypherQAChain directly (mentor's approach - Lesson 7)
-        # This matches the notebooks exactly: cypherChain.run(question)
-        answer = await asyncio.wait_for(
-            asyncio.to_thread(langchain_rag.answer_with_cypher, q.question),
+        # Use LangGraph workflow with LangChain components inside (GraphCypherQAChain, RetrievalQAWithSourcesChain)
+        result = await asyncio.wait_for(
+            asyncio.to_thread(graph.invoke, initial_state),
             timeout=60.0
         )
         
@@ -89,17 +111,17 @@ async def ask_question(q: Question):
                 conversation_service.add_message(
                     session_id, 
                     "assistant", 
-                    answer,
-                    metadata={}
+                    result["final_answer"],
+                    metadata={"cypher_query": result.get("cypher_query", "")}
                 )
             except Exception:
                 pass  # Continue even if message logging fails
         
         return {
-            "question": q.question,
-            "cypher_query": "",  # GraphCypherQAChain generates internally
-            "answer": answer,
-            "error": "",
+            "question": result["question"],
+            "cypher_query": result.get("cypher_query", ""),
+            "answer": result["final_answer"],
+            "error": result.get("error", ""),
             "session_id": session_id
         }
     except asyncio.TimeoutError:
