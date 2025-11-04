@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 
-from services.langchain_rag_service import LangChainRAGService
 from graph.workflow import graph  # Use LangGraph workflow
 from services.conversation_service import conversation_service
 from services.neo4j_service import Neo4jService
@@ -99,7 +98,7 @@ async def ask_question(q: Question):
     }
 
     try:
-        # Use LangGraph workflow with LangChain components inside (GraphCypherQAChain, RetrievalQAWithSourcesChain)
+        # Use LangGraph workflow (pure LangGraph, no LangChain)
         result = await asyncio.wait_for(
             asyncio.to_thread(graph.invoke, initial_state),
             timeout=60.0
