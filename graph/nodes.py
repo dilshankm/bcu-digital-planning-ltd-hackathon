@@ -244,27 +244,33 @@ def refine_query(state: GraphState) -> GraphState:
     question = state.get("question", "")
     cypher = state.get("cypher_query", "")
     results = state.get("neo4j_results", [])
+    error = state.get("error", "")
     context = state.get("context", "")
     
     if not cypher:
         print("   ⏭️  No query to refine. Skipping.")
         return state
     
-    # Check if results are empty or too few
-    if len(results) == 0:
+    # Check if there was a syntax error or if results are empty
+    if error or len(results) == 0:
+        error_context = f"Error: {error}\n\n" if error else ""
         refinement_prompt = (
-            f"The Cypher query returned no results:\n{cypher}\n\n"
+            f"{error_context}"
+            f"The Cypher query failed or returned no results:\n{cypher}\n\n"
             f"Original question: {question}\n\n"
             f"Analyze why this query might have failed and suggest an improved query "
             f"that is more likely to return results. Consider:\n"
-            f"- Relaxing WHERE constraints\n"
-            f"- Checking for typos or incorrect property names\n"
-            f"- Using CONTAINS instead of exact matches\n"
+            f"- Syntax errors: After WITH/aggregation, you cannot reference variables from before\n"
+            f"- Use proper Cypher syntax: aggregate in WITH, then filter in WHERE\n"
+            f"- For multiple conditions: MATCH (p:Patient)-[:HAS_CONDITION]->(c:Condition) WITH p, count(c) as conditionCount WHERE conditionCount > 1\n"
+            f"- For expensive treatments: Check Encounter.totalCost or Procedure baseCost\n"
+            f"- Relaxing WHERE constraints if needed\n"
             f"- Expanding relationship patterns\n"
         )
         refined_cypher = llm_service.generate_cypher(refinement_prompt, SCHEMA)
         state["cypher_query"] = refined_cypher
         state["neo4j_results"] = []  # Reset to re-execute
+        state["error"] = ""  # Clear error
         print(f"   ✅ Refined query: {refined_cypher[:100]}...")
         _append_message(state, "refiner", f"Refined query: {refined_cypher}")
     elif len(results) > 100:
