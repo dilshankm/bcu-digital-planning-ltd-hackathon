@@ -21,6 +21,9 @@ except ImportError:
 
 app = FastAPI(title="Healthcare GraphRAG API")
 
+# Initialize LangChain RAG service (mentor's approach - Lesson 7)
+langchain_rag = LangChainRAGService()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -98,9 +101,10 @@ async def ask_question(q: Question):
     }
 
     try:
-        # Run the graph with timeout (60 seconds)
-        result = await asyncio.wait_for(
-            asyncio.to_thread(graph.invoke, initial_state),
+        # Use LangChain GraphCypherQAChain directly (mentor's approach - Lesson 7)
+        # This matches the notebooks exactly: cypherChain.run(question)
+        answer = await asyncio.wait_for(
+            asyncio.to_thread(langchain_rag.answer_with_cypher, q.question),
             timeout=60.0
         )
         
@@ -110,17 +114,17 @@ async def ask_question(q: Question):
                 conversation_service.add_message(
                     session_id, 
                     "assistant", 
-                    result["final_answer"],
-                    metadata={"cypher_query": result.get("cypher_query", "")}
+                    answer,
+                    metadata={}
                 )
             except Exception:
                 pass  # Continue even if message logging fails
         
         return {
-            "question": result["question"],
-            "cypher_query": result["cypher_query"],
-            "answer": result["final_answer"],
-            "error": result.get("error", ""),
+            "question": q.question,
+            "cypher_query": "",  # GraphCypherQAChain generates internally
+            "answer": answer,
+            "error": "",
             "session_id": session_id
         }
     except asyncio.TimeoutError:
