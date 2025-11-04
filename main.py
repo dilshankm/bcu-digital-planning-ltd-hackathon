@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
@@ -51,9 +51,14 @@ async def root():
 
 
 @app.post("/ask")
-async def ask_question(q: Question):
+async def ask_question(q: Question, response: Response):
     """Ask a question about the healthcare data (supports multi-turn conversations)"""
     import asyncio
+    
+    # Prevent CloudFront caching for API responses
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     
     # Handle session management - create automatically if not provided
     session_id = q.session_id
