@@ -138,12 +138,14 @@ async def get_session(session_id: str):
 
 
 @app.get("/explore/nodes")
-async def explore_nodes(node_type: Optional[str] = None, limit: int = 20):
-    """Explore nodes in the graph"""
+async def explore_nodes(node_type: Optional[str] = None, label: Optional[str] = None, limit: int = 20):
+    """Explore nodes in the graph - supports both 'node_type' and 'label' parameters for compatibility"""
     neo4j_service = Neo4jService()
     try:
-        if node_type:
-            query = f"MATCH (n:{node_type}) RETURN id(n) as id, labels(n) as labels, properties(n) as properties LIMIT {limit}"
+        # Support both 'label' (frontend) and 'node_type' (backend) parameters
+        node_label = label or node_type
+        if node_label:
+            query = f"MATCH (n:{node_label}) RETURN id(n) as id, labels(n) as labels, properties(n) as properties LIMIT {limit}"
         else:
             query = f"MATCH (n) RETURN id(n) as id, labels(n) as labels, properties(n) as properties LIMIT {limit}"
         results = neo4j_service.execute_query(query)
