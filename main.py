@@ -45,16 +45,25 @@ async def ask_question(q: Question):
     """Ask a question about the healthcare data (supports multi-turn conversations)"""
     import asyncio
     
-    # Handle session management
+    # Handle session management - create automatically if not provided
     session_id = q.session_id
     if not session_id:
-        session_id = conversation_service.create_session()
+        try:
+            session_id = conversation_service.create_session()
+        except Exception as e:
+            # If session creation fails, continue without session (single-turn mode)
+            session_id = None
     
-    # Get conversation history
-    conversation_history = conversation_service.get_conversation_context(session_id, max_messages=5)
-    
-    # Add user question to conversation
-    conversation_service.add_message(session_id, "user", q.question)
+    # Get conversation history if session exists
+    conversation_history = ""
+    if session_id:
+        try:
+            conversation_history = conversation_service.get_conversation_context(session_id, max_messages=5)
+            # Add user question to conversation
+            conversation_service.add_message(session_id, "user", q.question)
+        except Exception:
+            # If session fails, continue without conversation history
+            session_id = None
     
     # Initialize state
     initial_state = {
@@ -85,13 +94,17 @@ async def ask_question(q: Question):
             timeout=60.0
         )
         
-        # Add assistant response to conversation
-        conversation_service.add_message(
-            session_id, 
-            "assistant", 
-            result["final_answer"],
-            metadata={"cypher_query": result.get("cypher_query", "")}
-        )
+        # Add assistant response to conversation if session exists
+        if session_id:
+            try:
+                conversation_service.add_message(
+                    session_id, 
+                    "assistant", 
+                    result["final_answer"],
+                    metadata={"cypher_query": result.get("cypher_query", "")}
+                )
+            except Exception:
+                pass  # Continue even if message logging fails
         
         return {
             "question": result["question"],
@@ -102,7 +115,11 @@ async def ask_question(q: Question):
         }
     except asyncio.TimeoutError:
         error_msg = "Request timed out. The query may be too complex. Please try a simpler question."
-        conversation_service.add_message(session_id, "system", error_msg)
+        if session_id:
+            try:
+                conversation_service.add_message(session_id, "system", error_msg)
+            except Exception:
+                pass
         return {
             "question": q.question,
             "cypher_query": "",
@@ -112,7 +129,11 @@ async def ask_question(q: Question):
         }
     except Exception as e:
         error_msg = str(e)
-        conversation_service.add_message(session_id, "system", f"Error: {error_msg}")
+        if session_id:
+            try:
+                conversation_service.add_message(session_id, "system", f"Error: {error_msg}")
+            except Exception:
+                pass
         return {
             "question": q.question,
             "cypher_query": "",
@@ -124,9 +145,18 @@ async def ask_question(q: Question):
 
 @app.post("/session")
 async def create_session():
-    """Create a new conversation session"""
-    session_id = conversation_service.create_session()
-    return {"session_id": session_id}
+    """Create a new conversation session - returns immediately"""
+    try:
+        session_id = conversation_service.create_session()
+        return {"session_id": session_id, "status": "ready"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create session: {str(e)}")
+
+
+@app.get("/session/health")
+async def session_health():
+    """Health check for session service"""
+    return {"status": "ready", "service": "conversation"}
 
 
 @app.get("/session/{session_id}")
