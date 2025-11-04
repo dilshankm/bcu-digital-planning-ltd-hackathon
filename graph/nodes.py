@@ -263,12 +263,13 @@ def synthesizer_agent(state: GraphState) -> GraphState:
     if not answer or len(answer.strip()) < 10:
         answer = f"I found {len(results)} matching records, but I'm having trouble summarizing them. Please try rephrasing your question or asking for more specific information."
     
-    # AGGRESSIVE filter for technical terms that users shouldn't see
+    # AGGRESSIVE filter for technical terms and vague language that users shouldn't see
     banned_phrases = [
         "graph context", "graph", "cypher query", "cypher", "database query", 
         "query results", "the query", "nodes", "relationships", "neo4j",
         "based on the", "according to the", "the data shows", "the information shows",
-        "in the context", "from the context"
+        "in the context", "from the context", "to identify", "we need to analyze",
+        "available information"
     ]
     answer_lower = answer.lower()
     for phrase in banned_phrases:

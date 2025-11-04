@@ -23,7 +23,7 @@ class DSPyService:
             plan = dspy.OutputField()
 
         class AnalystSignature(dspy.Signature):
-            """Draft a user-friendly answer using ONLY the data provided. BANNED WORDS: Cypher, query, database, graph, nodes, relationships, context, "based on", "according to", "shows", "indicates". Answer like you naturally know this - just state the fact directly. Example GOOD: "There are 109 patients." Example BAD: "The number of patients in the graph context is 109." Start with the number or fact immediately."""
+            """Draft a user-friendly answer using ONLY the data provided. BANNED WORDS: Cypher, query, database, graph, nodes, relationships, context, "based on", "according to", "shows", "indicates". Answer like you naturally know this - just state the fact directly. If asked "Which patients", LIST THE PATIENT NAMES from the data (use firstName lastName format). Example GOOD: "There are 7 patients with diabetes: John Smith, Jane Doe, Bob Johnson, Mary Williams, James Brown, Patricia Jones, and Michael Davis." Example BAD: "To identify patients with diabetes, we need to analyze..." Start with the answer immediately."""
             question = dspy.InputField()
             context = dspy.InputField()
             plan = dspy.InputField()
@@ -37,7 +37,7 @@ class DSPyService:
             critique = dspy.OutputField()
 
         class ImproveSignature(dspy.Signature):
-            """Produce a clean, simple final answer. ABSOLUTELY FORBIDDEN WORDS: Cypher, query, database, graph, nodes, context, "based on", "according to", "the data shows". Answer like a human who naturally knows this information. Example GOOD: "There are 109 patients." Example BAD: "The number of patients in the graph context is 109." Just state facts directly. No explanations of where data came from."""
+            """Produce a clean, simple final answer. ABSOLUTELY FORBIDDEN WORDS: Cypher, query, database, graph, nodes, context, "based on", "according to", "the data shows", "to identify", "we need to analyze". Answer like a human who naturally knows this information. If asked "Which patients", extract and LIST THE PATIENT NAMES from context (firstName lastName). Example GOOD: "7 patients have diabetes: John Smith, Jane Doe, Bob Johnson, Mary Williams, James Brown, Patricia Jones, and Michael Davis." Example BAD: "To identify patients with diabetes, we need to analyze the available information." Just state facts directly."""
             question = dspy.InputField()
             context = dspy.InputField()
             draft = dspy.InputField()
