@@ -1,8 +1,21 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
 from graph.workflow import graph
 
 app = FastAPI(title="Healthcare GraphRAG API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "https://d1vhufjc9w8vpb.cloudfront.net",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class Question(BaseModel):
@@ -28,10 +41,8 @@ async def ask_question(q: Question):
         "query_embedding": [],
         "similar_nodes": [],
         "subgraph": {"nodes": [], "relationships": []},
-        "context": ""
-        ,
-        "plan": ""
-        ,
+        "context": "",
+        "plan": "",
         "messages": [],
         "step": 0,
         "max_steps": 6,
