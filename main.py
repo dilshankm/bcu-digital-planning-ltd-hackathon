@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 
-from graph.workflow import graph
+from services.langchain_rag_service import LangChainRAGService
 from services.conversation_service import conversation_service
 from services.neo4j_service import Neo4jService
 from services.csv_import_service import CSVImportService
