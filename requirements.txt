@@ -9,6 +9,7 @@ langchain-openai>=0.0.5
 openai>=1.0.0
 fastapi>=0.100.0
 uvicorn>=0.23.0
+python-multipart>=0.0.6
 langgraph
 python-dotenv
 pydantic-settings
