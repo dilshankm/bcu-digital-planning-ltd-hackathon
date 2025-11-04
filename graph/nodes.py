@@ -214,8 +214,9 @@ def synthesizer_agent(state: GraphState) -> GraphState:
     cypher_query = state.get("cypher_query", "")
     
     # Build comprehensive context from graph results and subgraph
+    # Increase limit to 50 for better patient listing
     limited_results = []
-    for r in results[:10]:
+    for r in results[:50]:
         if isinstance(r, dict):
             limited_r = {k: str(v)[:100] if len(str(v)) > 100 else v for k, v in r.items()}
             limited_results.append(limited_r)

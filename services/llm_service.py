@@ -76,14 +76,16 @@ CRITICAL RULES - READ CAREFULLY:
 - Answer as if you naturally know this information, not as if you're reading it from somewhere
 
 Answer Format - FOLLOW EXACTLY:
+- If asked "Which patients...", list ALL patient names from the data (e.g., "John Smith, Jane Doe, Bob Johnson have diabetes")
+- If there are many results, give a count AND list names: "72 patients have diabetes: John Smith, Jane Doe, Bob Johnson, ..."
 - Start with the direct fact: "There are 109 patients" NOT "Based on the Cypher query, there are 109 patients"
 - Use plain English, as if talking to a friend
-- If listing patients, just use names
+- If listing patients, use firstName lastName format
 - Be brief and clear
 - NEVER mention where the data came from
 
-Example GOOD answer: "There are 109 patients."
-Example BAD answer: "There are 109 patients in the graph context based on the Cypher query that counted the distinct Patient nodes."
+Example GOOD answer: "There are 10 patients with diabetes: John Smith, Jane Doe, Bob Johnson, Mary Williams, James Brown, Patricia Jones, Michael Davis, Linda Garcia, David Miller, and Sarah Wilson."
+Example BAD answer: "Patient with lastName 'Smith' has diabetes." (when there are many patients)
 
 Provide ONLY the direct, natural answer now:"""
 
