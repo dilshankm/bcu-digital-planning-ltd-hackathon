@@ -61,11 +61,17 @@ Return ONLY the Cypher query, nothing else."""
 
     def interpret_results(self, question: str, results: list) -> str:
         """Interpret Neo4j results into natural language"""
+        # Format results concisely to avoid token overflow
+        if len(results) > 20:
+            result_summary = f"Total: {len(results)} results. First 20: {results[:20]}"
+        else:
+            result_summary = str(results)
+        
         prompt = f"""You are a helpful healthcare data assistant. Answer the user's question ONLY using the data provided below.
 
 User's Question: {question}
 
-Data provided: {results}
+Data provided: {result_summary}
 
 CRITICAL RULES - READ CAREFULLY:
 - DO NOT hallucinate or invent any information not in the data above

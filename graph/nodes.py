@@ -214,9 +214,23 @@ def synthesizer_agent(state: GraphState) -> GraphState:
     cypher_query = state.get("cypher_query", "")
     
     # Build comprehensive context from graph results and subgraph
-    # Increase limit to 50 for better patient listing
-    # Don't convert dicts to strings - preserve structure for LLM
-    limited_results = results[:50] if len(results) > 50 else results
+    # Extract ONLY essential fields to avoid token overflow
+    # Even 10 full patient records = 48K tokens! We only need names for listing
+    limited_results = results[:100] if len(results) > 100 else results
+    clean_results = []
+    for r in limited_results:
+        # Extract only firstName, lastName, and id - enough for user-friendly answers
+        clean_r = {}
+        if 'firstName' in r:
+            clean_r['firstName'] = r['firstName']
+        if 'lastName' in r:
+            clean_r['lastName'] = r['lastName']
+        if 'id' in r:
+            clean_r['id'] = r['id']
+        # Include description if it's a Condition/Procedure/Observation
+        if 'description' in r:
+            clean_r['description'] = r['description']
+        clean_results.append(clean_r)
     
     truncated_context = context[:3000] if len(context) > 3000 else context
     
@@ -235,8 +249,13 @@ def synthesizer_agent(state: GraphState) -> GraphState:
     
     # Use simple LLM interpretation directly - more reliable than DSPy multi-agent
     # DSPy was too cautious and often returned vague/empty answers even with good data
-    print(f"   📊 Passing {len(limited_results)} results to LLM. Sample: {limited_results[:2] if limited_results else 'empty'}")
-    answer = llm_service.interpret_results(question, limited_results)
+    print(f"   📊 Passing {len(clean_results)} results to LLM.")
+    try:
+        answer = llm_service.interpret_results(question, clean_results)
+        print(f"   🤖 LLM returned: '{answer[:200] if answer else 'EMPTY/NONE'}'")
+    except Exception as e:
+        print(f"   ❌ LLM interpretation failed: {e}")
+        answer = f"I found {len(results)} matching records but encountered an error interpreting them: {str(e)}"
     
     # Ensure answer is not empty and doesn't contain technical jargon
     if not answer or len(answer.strip()) < 10:
@@ -383,11 +402,16 @@ def planner_decide(state: GraphState) -> GraphState:
             # Execute query first before trying refinement
             decision = "execute"
             rationale = "Have Cypher but no results; execute query first."
-    elif len(results) > 0 and refinement_count == 0 and len(results) > 100:
-        # Too many results - refine
-        decision = "refine"
-        rationale = "Too many results; refine query to be more specific."
-        state["refinement_count"] = refinement_count + 1
+    elif len(results) > 100:
+        # Too many results - refine (only once)
+        if refinement_count == 0:
+            decision = "refine"
+            rationale = "Too many results; refine query to be more specific."
+            state["refinement_count"] = refinement_count + 1
+        else:
+            # Already refined once, just use what we have
+            decision = "answer"
+            rationale = "Have results (already refined once); synthesize answer."
     elif cypher and len(results) > 0:
         # Have results - synthesize answer
         decision = "answer"
