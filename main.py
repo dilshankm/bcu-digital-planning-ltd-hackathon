@@ -67,38 +67,13 @@ async def ask_question(q: Question):
             # If session creation fails, continue without session (single-turn mode)
             session_id = None
     
-    # Get conversation history if session exists
-    conversation_history = ""
+    # Add user question to conversation if session exists
     if session_id:
         try:
-            conversation_history = conversation_service.get_conversation_context(session_id, max_messages=5)
-            # Add user question to conversation
             conversation_service.add_message(session_id, "user", q.question)
         except Exception:
-            # If session fails, continue without conversation history
+            # If session fails, continue without session
             session_id = None
-    
-    # Initialize state
-    initial_state = {
-        "question": q.question,
-        "cypher_query": "",
-        "neo4j_results": [],
-        "final_answer": "",
-        "error": "",
-        "query_embedding": [],
-        "similar_nodes": [],
-        "subgraph": {"nodes": [], "relationships": []},
-        "context": "",
-        "plan": "",
-        "messages": [],
-        "step": 0,
-        "max_steps": 6,
-        "decision": "",
-        "confidence": 0.0,
-        "session_id": session_id,
-        "conversation_history": conversation_history,
-        "refinement_count": 0
-    }
 
     try:
         # Use LangChain GraphCypherQAChain directly (mentor's approach - Lesson 7)
