@@ -1,12 +1,68 @@
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from graph.workflow import graph  # Use LangGraph workflow
 from services.conversation_service import conversation_service
 from services.neo4j_service import Neo4jService
 from services.csv_import_service import CSVImportService
+
+
+def _get_node_display_name(node: Dict[str, Any]) -> str:
+    """Generate a human-readable display name for a node"""
+    label = node.get("label", "Unknown")
+    properties = node.get("properties", {})
+    
+    # Patient: Use firstName + lastName
+    if label == "Patient":
+        first = properties.get("firstName", "")
+        last = properties.get("lastName", "")
+        if first or last:
+            return f"{first} {last}".strip() or f"Patient {node.get('id', '')}"
+        return f"Patient {node.get('id', '')}"
+    
+    # Condition: Use description
+    if label == "Condition":
+        desc = properties.get("description", "")
+        if desc:
+            return desc[:50]  # Truncate long descriptions
+        return f"Condition {node.get('id', '')}"
+    
+    # Encounter: Use description or date
+    if label == "Encounter":
+        desc = properties.get("description", "")
+        if desc:
+            return desc[:50]
+        start = properties.get("start", "")
+        if start:
+            return f"Encounter ({start[:10]})"  # Date only
+        return f"Encounter {node.get('id', '')}"
+    
+    # Procedure: Use description
+    if label == "Procedure":
+        desc = properties.get("description", "")
+        if desc:
+            return desc[:50]
+        return f"Procedure {node.get('id', '')}"
+    
+    # Observation: Use description or code
+    if label == "Observation":
+        desc = properties.get("description", "")
+        if desc:
+            return desc[:50]
+        code = properties.get("code", "")
+        if code:
+            return f"Observation ({code})"
+        return f"Observation {node.get('id', '')}"
+    
+    # Default: Use label + first property value
+    if properties:
+        first_key = list(properties.keys())[0]
+        first_val = str(properties[first_key])[:30]
+        return f"{label} ({first_key}={first_val})"
+    
+    return f"{label} {node.get('id', '')}"
 # Import UploadFile conditionally to avoid startup crash if python-multipart missing
 try:
     from fastapi import UploadFile, File
@@ -121,6 +177,37 @@ async def ask_question(q: Question, response: Response):
             except Exception:
                 pass  # Continue even if message logging fails
         
+        # Enrich traversal paths with readable node information
+        nodes_dict = {}
+        nodes_used = result.get("subgraph", {}).get("nodes", [])
+        for node in nodes_used:
+            node_id = str(node.get("id", ""))
+            nodes_dict[node_id] = {
+                "label": node.get("label", "Unknown"),
+                "properties": node.get("properties", {}),
+                "display_name": _get_node_display_name(node)
+            }
+        
+        # Enrich relationships with readable information
+        enriched_paths = []
+        relationships = result.get("subgraph", {}).get("relationships", [])
+        for rel in relationships:
+            start_id = str(rel.get("start", ""))
+            end_id = str(rel.get("end", ""))
+            start_node = nodes_dict.get(start_id, {"label": "Unknown", "display_name": f"Node {start_id}"})
+            end_node = nodes_dict.get(end_id, {"label": "Unknown", "display_name": f"Node {end_id}"})
+            
+            enriched_paths.append({
+                "start_id": start_id,
+                "start_label": start_node["label"],
+                "start_name": start_node["display_name"],
+                "type": rel.get("type", "UNKNOWN"),
+                "end_id": end_id,
+                "end_label": end_node["label"],
+                "end_name": end_node["display_name"],
+                "path_display": f"{start_node['display_name']} ({start_node['label']}) --{rel.get('type', 'UNKNOWN')}--> {end_node['display_name']} ({end_node['label']})"
+            })
+        
         return {
             "question": result["question"],
             "cypher_query": result.get("cypher_query", ""),
@@ -128,8 +215,8 @@ async def ask_question(q: Question, response: Response):
             "error": result.get("error", ""),
             "session_id": session_id,
             # Stretch Goals: Visualization and Explainability
-            "traversal_paths": result.get("subgraph", {}).get("relationships", []),
-            "nodes_used": result.get("subgraph", {}).get("nodes", []),
+            "traversal_paths": enriched_paths,
+            "nodes_used": nodes_used,
             "similar_nodes_found": result.get("similar_nodes", []),
             "plan": result.get("plan", ""),
             "steps_taken": result.get("step", 0),
