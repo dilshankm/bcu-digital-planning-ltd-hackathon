@@ -389,6 +389,9 @@ async def explore_nodes(
                         "position": "top-right",
                         "show": True
                     }
+                },
+                "legend": {
+                    "show": False
                 }
             }
         }
@@ -462,6 +465,9 @@ async def explore_node(node_id: int, depth: int = 1):
                         "position": "top-right",
                         "show": True
                     }
+                },
+                "legend": {
+                    "show": False
                 }
             }
         }
@@ -538,6 +544,9 @@ async def explore_relationships(
                         "position": "top-right",
                         "show": True
                     }
+                },
+                "legend": {
+                    "show": False
                 }
             }
         }
