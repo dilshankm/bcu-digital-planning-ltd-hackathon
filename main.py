@@ -500,6 +500,7 @@ async def explore_relationships(
 
 
 @app.get("/explore/stats")
+@app.get("/statistics")  # Alias for frontend compatibility
 async def get_stats():
     """Get database statistics for UI dashboard"""
     neo4j_service = Neo4jService()
@@ -523,8 +524,11 @@ async def get_stats():
         # Get total counts
         total_nodes_query = "MATCH (n) RETURN count(n) as total"
         total_rels_query = "MATCH ()-[r]->() RETURN count(r) as total"
-        total_nodes = neo4j_service.execute_query(total_nodes_query)[0].get("total", 0)
-        total_rels = neo4j_service.execute_query(total_rels_query)[0].get("total", 0)
+        total_nodes_result = neo4j_service.execute_query(total_nodes_query)
+        total_rels_result = neo4j_service.execute_query(total_rels_query)
+        
+        total_nodes = total_nodes_result[0].get("total", 0) if total_nodes_result else 0
+        total_rels = total_rels_result[0].get("total", 0) if total_rels_result else 0
         
         return {
             "total_nodes": total_nodes,
