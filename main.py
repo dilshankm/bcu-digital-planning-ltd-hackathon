@@ -400,6 +400,13 @@ async def explore_nodes(
                     "width": "100%",
                     "height": "100vh",
                     "min_height": "800px"
+                },
+                "node_styling": {
+                    "width": 60,
+                    "height": 60,
+                    "font_size": 14,
+                    "min_width": 50,
+                    "min_height": 50
                 }
             }
         }
@@ -484,6 +491,13 @@ async def explore_node(node_id: int, depth: int = 1):
                     "width": "100%",
                     "height": "100vh",
                     "min_height": "800px"
+                },
+                "node_styling": {
+                    "width": 60,
+                    "height": 60,
+                    "font_size": 14,
+                    "min_width": 50,
+                    "min_height": 50
                 }
             }
         }
@@ -571,6 +585,13 @@ async def explore_relationships(
                     "width": "100%",
                     "height": "100vh",
                     "min_height": "800px"
+                },
+                "node_styling": {
+                    "width": 60,
+                    "height": 60,
+                    "font_size": 14,
+                    "min_width": 50,
+                    "min_height": 50
                 }
             }
         }
