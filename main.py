@@ -338,6 +338,14 @@ async def explore_nodes(
         total_result = neo4j_service.execute_query(count_query)
         total_count = total_result[0].get("total", 0) if total_result else 0
         
+        # Get node type counts for filters
+        node_type_counts_query = """
+        MATCH (n)
+        RETURN labels(n)[0] as label, count(n) as count
+        ORDER BY count DESC
+        """
+        node_type_counts = neo4j_service.execute_query(node_type_counts_query)
+        
         # Get paginated results
         query = base_query + where_clause + """
         RETURN id(n) as id, labels(n) as labels, properties(n) as properties 
@@ -388,6 +396,28 @@ async def explore_nodes(
                     "buttons": {
                         "position": "top-right",
                         "show": True
+                    }
+                },
+                "filters_panel": {
+                    "show": True,
+                    "position": "inside-canvas",
+                    "collapsible": True,
+                    "title": "Filters",
+                    "filters": [
+                        {
+                            "type": "node_types",
+                            "label": "Node Types",
+                            "options": [{"label": item["label"], "count": item["count"]} 
+                                       for item in node_type_counts if item.get("label")]
+                        }
+                    ],
+                    "shortcuts": {
+                        "+": "Zoom in",
+                        "-": "Zoom out",
+                        "0": "Fit to view",
+                        "R": "Reset view",
+                        "Space": "Pause animation",
+                        "Esc": "Deselect"
                     }
                 }
             }
@@ -493,6 +523,14 @@ async def explore_relationships(
         total_result = neo4j_service.execute_query(count_query)
         total_count = total_result[0].get("total", 0) if total_result else 0
         
+        # Get relationship type counts for filters
+        rel_type_counts_query = """
+        MATCH ()-[r]->()
+        RETURN type(r) as type, count(r) as count
+        ORDER BY count DESC
+        """
+        rel_type_counts = neo4j_service.execute_query(rel_type_counts_query)
+        
         # Get paginated results
         query = base_query + """
         RETURN id(a) as start, labels(a)[0] as start_label, 
@@ -537,6 +575,28 @@ async def explore_relationships(
                     "buttons": {
                         "position": "top-right",
                         "show": True
+                    }
+                },
+                "filters_panel": {
+                    "show": True,
+                    "position": "inside-canvas",
+                    "collapsible": True,
+                    "title": "Filters",
+                    "filters": [
+                        {
+                            "type": "relationship_types",
+                            "label": "Relationship Types",
+                            "options": [{"label": item["type"], "count": item["count"]} 
+                                       for item in rel_type_counts if item.get("type")]
+                        }
+                    ],
+                    "shortcuts": {
+                        "+": "Zoom in",
+                        "-": "Zoom out",
+                        "0": "Fit to view",
+                        "R": "Reset view",
+                        "Space": "Pause animation",
+                        "Esc": "Deselect"
                     }
                 }
             }
