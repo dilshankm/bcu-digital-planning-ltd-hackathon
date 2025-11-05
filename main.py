@@ -302,18 +302,80 @@ async def get_session(session_id: str):
 
 
 @app.get("/explore/nodes")
-async def explore_nodes(node_type: Optional[str] = None, label: Optional[str] = None, limit: int = 20):
-    """Explore nodes in the graph - supports both 'node_type' and 'label' parameters for compatibility"""
+async def explore_nodes(
+    node_type: Optional[str] = None, 
+    label: Optional[str] = None, 
+    limit: int = 20,
+    skip: int = 0,
+    search: Optional[str] = None
+):
+    """Explore nodes in the graph with pagination and search"""
     neo4j_service = Neo4jService()
     try:
         # Support both 'label' (frontend) and 'node_type' (backend) parameters
         node_label = label or node_type
+        
+        # Build query with filters
         if node_label:
-            query = f"MATCH (n:{node_label}) RETURN id(n) as id, labels(n) as labels, properties(n) as properties LIMIT {limit}"
+            base_query = f"MATCH (n:{node_label})"
         else:
-            query = f"MATCH (n) RETURN id(n) as id, labels(n) as labels, properties(n) as properties LIMIT {limit}"
-        results = neo4j_service.execute_query(query)
-        return {"nodes": results, "count": len(results)}
+            base_query = "MATCH (n)"
+        
+        # Add search filter if provided
+        where_clause = ""
+        if search:
+            # Search in common properties (firstName, lastName, description, etc.)
+            where_clause = """
+            WHERE toLower(toString(n.firstName)) CONTAINS toLower($search) 
+               OR toLower(toString(n.lastName)) CONTAINS toLower($search)
+               OR toLower(toString(n.description)) CONTAINS toLower($search)
+               OR toLower(toString(n.id)) CONTAINS toLower($search)
+            """
+        
+        # Get total count for pagination
+        count_query = base_query + where_clause.replace("$search", f"'{search}'") if search else base_query
+        count_query = count_query.replace("MATCH", "MATCH") + " RETURN count(n) as total"
+        total_result = neo4j_service.execute_query(count_query)
+        total_count = total_result[0].get("total", 0) if total_result else 0
+        
+        # Get paginated results
+        query = base_query + where_clause + """
+        RETURN id(n) as id, labels(n) as labels, properties(n) as properties 
+        ORDER BY id(n) 
+        SKIP $skip LIMIT $limit
+        """
+        
+        params = {"skip": skip, "limit": limit}
+        if search:
+            params["search"] = search
+        
+        results = neo4j_service.execute_query(query, params)
+        
+        # Format nodes for UI (remove embeddings, add display names)
+        formatted_nodes = []
+        for node in results:
+            clean_node = {k: v for k, v in node.items() if k not in ['embedding', '_text_repr']}
+            if 'properties' in clean_node and isinstance(clean_node['properties'], dict):
+                clean_node['properties'] = {k: v for k, v in clean_node['properties'].items() 
+                                          if k not in ['embedding', '_text_repr']}
+            # Add display name
+            if isinstance(clean_node.get('properties'), dict):
+                props = clean_node['properties']
+                if 'firstName' in props and 'lastName' in props:
+                    clean_node['display_name'] = f"{props['firstName']} {props['lastName']}"
+                elif 'description' in props:
+                    clean_node['display_name'] = props['description'][:50]
+                else:
+                    clean_node['display_name'] = f"{clean_node.get('labels', ['Unknown'])[0]} {clean_node.get('id', '')}"
+            formatted_nodes.append(clean_node)
+        
+        return {
+            "nodes": formatted_nodes,
+            "count": len(formatted_nodes),
+            "total": total_count,
+            "skip": skip,
+            "limit": limit
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -322,15 +384,57 @@ async def explore_nodes(node_type: Optional[str] = None, label: Optional[str] = 
 
 @app.get("/explore/node/{node_id}")
 async def explore_node(node_id: int, depth: int = 1):
-    """Explore a specific node and its neighbors"""
+    """Explore a specific node and its neighbors - returns formatted data for graph visualization"""
     neo4j_service = Neo4jService()
     try:
+        # Get the node itself first
+        node_query = f"MATCH (n) WHERE id(n) = $node_id RETURN id(n) as id, labels(n) as labels, properties(n) as properties"
+        node_result = neo4j_service.execute_query(node_query, {"node_id": node_id})
+        
+        if not node_result:
+            raise HTTPException(status_code=404, detail=f"Node {node_id} not found")
+        
+        # Get subgraph
         subgraph = neo4j_service.expand_subgraph([node_id], depth=depth)
+        
+        # Format nodes for UI (remove embeddings, add display names)
+        formatted_nodes = []
+        for node in subgraph.get("nodes", []):
+            clean_node = {k: v for k, v in node.items() if k not in ['embedding', '_text_repr']}
+            if 'properties' in clean_node and isinstance(clean_node['properties'], dict):
+                clean_node['properties'] = {k: v for k, v in clean_node['properties'].items() 
+                                          if k not in ['embedding', '_text_repr']}
+                # Add display name
+                props = clean_node['properties']
+                if 'firstName' in props and 'lastName' in props:
+                    clean_node['display_name'] = f"{props['firstName']} {props['lastName']}"
+                elif 'description' in props:
+                    clean_node['display_name'] = props['description'][:50]
+                else:
+                    clean_node['display_name'] = f"{clean_node.get('label', 'Unknown')} {clean_node.get('id', '')}"
+            formatted_nodes.append(clean_node)
+        
+        # Format relationships
+        formatted_rels = []
+        for rel in subgraph.get("relationships", []):
+            formatted_rels.append({
+                "source": rel.get("start"),
+                "target": rel.get("end"),
+                "type": rel.get("type"),
+                "label": rel.get("type", "UNKNOWN")
+            })
+        
         return {
             "node_id": node_id,
-            "subgraph": subgraph,
-            "depth": depth
+            "node": formatted_nodes[0] if formatted_nodes else None,
+            "nodes": formatted_nodes,
+            "relationships": formatted_rels,
+            "depth": depth,
+            "node_count": len(formatted_nodes),
+            "relationship_count": len(formatted_rels)
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -338,16 +442,96 @@ async def explore_node(node_id: int, depth: int = 1):
 
 
 @app.get("/explore/relationships")
-async def explore_relationships(rel_type: Optional[str] = None, limit: int = 50):
-    """Explore relationships in the graph"""
+async def explore_relationships(
+    rel_type: Optional[str] = None, 
+    limit: int = 50,
+    skip: int = 0
+):
+    """Explore relationships in the graph with pagination"""
     neo4j_service = Neo4jService()
     try:
+        # Build query
         if rel_type:
-            query = f"MATCH (a)-[r:{rel_type}]->(b) RETURN id(a) as start, type(r) as type, id(b) as end, properties(r) as properties LIMIT {limit}"
+            base_query = f"MATCH (a)-[r:{rel_type}]->(b)"
         else:
-            query = f"MATCH (a)-[r]->(b) RETURN id(a) as start, type(r) as type, id(b) as end, properties(r) as properties LIMIT {limit}"
-        results = neo4j_service.execute_query(query)
-        return {"relationships": results, "count": len(results)}
+            base_query = "MATCH (a)-[r]->(b)"
+        
+        # Get total count
+        count_query = base_query + " RETURN count(r) as total"
+        total_result = neo4j_service.execute_query(count_query)
+        total_count = total_result[0].get("total", 0) if total_result else 0
+        
+        # Get paginated results
+        query = base_query + """
+        RETURN id(a) as start, labels(a)[0] as start_label, 
+               type(r) as type, properties(r) as properties,
+               id(b) as end, labels(b)[0] as end_label
+        ORDER BY id(a), id(b)
+        SKIP $skip LIMIT $limit
+        """
+        
+        results = neo4j_service.execute_query(query, {"skip": skip, "limit": limit})
+        
+        # Format for UI
+        formatted_rels = []
+        for rel in results:
+            formatted_rels.append({
+                "source": rel.get("start"),
+                "target": rel.get("end"),
+                "type": rel.get("type"),
+                "label": rel.get("type", "UNKNOWN"),
+                "source_label": rel.get("start_label"),
+                "target_label": rel.get("end_label"),
+                "properties": {k: v for k, v in (rel.get("properties") or {}).items() 
+                             if k not in ['embedding', '_text_repr']}
+            })
+        
+        return {
+            "relationships": formatted_rels,
+            "count": len(formatted_rels),
+            "total": total_count,
+            "skip": skip,
+            "limit": limit
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        neo4j_service.close()
+
+
+@app.get("/explore/stats")
+async def get_stats():
+    """Get database statistics for UI dashboard"""
+    neo4j_service = Neo4jService()
+    try:
+        # Get node counts per type
+        node_counts_query = """
+        MATCH (n)
+        RETURN labels(n)[0] as label, count(n) as count
+        ORDER BY count DESC
+        """
+        node_counts = neo4j_service.execute_query(node_counts_query)
+        
+        # Get relationship counts per type
+        rel_counts_query = """
+        MATCH ()-[r]->()
+        RETURN type(r) as type, count(r) as count
+        ORDER BY count DESC
+        """
+        rel_counts = neo4j_service.execute_query(rel_counts_query)
+        
+        # Get total counts
+        total_nodes_query = "MATCH (n) RETURN count(n) as total"
+        total_rels_query = "MATCH ()-[r]->() RETURN count(r) as total"
+        total_nodes = neo4j_service.execute_query(total_nodes_query)[0].get("total", 0)
+        total_rels = neo4j_service.execute_query(total_rels_query)[0].get("total", 0)
+        
+        return {
+            "total_nodes": total_nodes,
+            "total_relationships": total_rels,
+            "node_counts": {item["label"]: item["count"] for item in node_counts},
+            "relationship_counts": {item["type"]: item["count"] for item in rel_counts}
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
