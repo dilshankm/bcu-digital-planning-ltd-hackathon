@@ -152,10 +152,11 @@ Return ONLY the Cypher query, nothing else."""
                 result_data = json.dumps(results, indent=2)
             else:
                 # Patient records - extract ONLY firstName and lastName
-                # Limit to 200 records max (only names = ~10K tokens, safe)
-                # But include total count so LLM knows the real number
-                limited = results[:200] if len(results) > 200 else results
+                # For display: show first 50 names if total > 50, otherwise show all
                 total_count = len(results)  # Keep original count for display
+                max_names_to_show = 50  # Show first 50 names max
+                limited = results[:max_names_to_show] if total_count > max_names_to_show else results
+                
                 formatted_results = []
                 for item in limited:
                     record = item
@@ -174,8 +175,11 @@ Return ONLY the Cypher query, nothing else."""
                             formatted_results.append(clean_record)
                 
                 # Format as simple JSON with ONLY names
-                # Always show the REAL total count, even if we limit the list
-                result_data = f"Found {total_count} total patients. Here are their names (showing first {len(formatted_results)}):\n{json.dumps(formatted_results, indent=2)}"
+                # Always show the REAL total count, even if we limit the list to 50 names
+                if total_count > max_names_to_show:
+                    result_data = f"Found {total_count} total patients. Here are the first {len(formatted_results)} names:\n{json.dumps(formatted_results, indent=2)}"
+                else:
+                    result_data = f"Found {total_count} total patients. Here are their names:\n{json.dumps(formatted_results, indent=2)}"
         
         result_summary = result_data
         
@@ -201,6 +205,7 @@ CRITICAL RULES - READ CAREFULLY:
 
 Answer Format - FOLLOW EXACTLY:
 - The data says "Found X total patients" - USE THAT NUMBER X as the count
+- Count the names in the JSON array - if you see 50 names but data says "Found 106 total patients", then X=106
 - If X is 50 or fewer, list ALL names: "There are X patients: [all X names]"
 - If X is more than 50, list first 50 names: "There are X patients: [first 50 names], ... and (X-50) others"
 - Start with the direct fact: "There are X patients" where X is the number from "Found X total patients"
@@ -208,9 +213,10 @@ Answer Format - FOLLOW EXACTLY:
 - Format names as: firstName lastName (e.g., "Kyong970 Bechtelar572")
 - Be brief and clear
 - NEVER mention where the data came from
-- CRITICAL: Use the number from "Found X total patients" - if it says "Found 106 total patients", say "106 patients" not "14"!
+- CRITICAL: Use the number from "Found X total patients" - if it says "Found 106 total patients", say "106 patients" not "14" or "50"!
 
-Example GOOD answer: "There are 106 patients with more than three chronic conditions: [first 50 names], ... and 56 others."
+Example GOOD answer (106 patients): "There are 106 patients with more than three chronic conditions: [first 50 names from JSON], ... and 56 others."
+Example GOOD answer (20 patients): "There are 20 patients: [all 20 names from JSON]."
 Example BAD answer: "There are 14 patients" when data says "Found 106 total patients"
 
 Provide ONLY the direct, natural answer now:"""
