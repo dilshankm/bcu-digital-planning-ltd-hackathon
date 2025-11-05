@@ -407,6 +407,67 @@ async def explore_nodes(
                     "font_size": 14,
                     "min_width": 50,
                     "min_height": 50
+                },
+                "design_system": {
+                    "name": "govuk",
+                    "colors": {
+                        "primary": "#005EA5",
+                        "secondary": "#00823B",
+                        "text": "#0B0C0C",
+                        "background": "#FFFFFF",
+                        "border": "#B1B4B6",
+                        "focus": "#FFDD00",
+                        "error": "#D4351C",
+                        "success": "#00703C"
+                    },
+                    "typography": {
+                        "font_family": "GDS Transport, Arial, sans-serif",
+                        "font_size_base": "19px",
+                        "font_size_heading": "36px",
+                        "font_size_subheading": "24px",
+                        "line_height": "1.5",
+                        "font_weight_normal": "400",
+                        "font_weight_bold": "700"
+                    },
+                    "spacing": {
+                        "unit": "5px",
+                        "small": "10px",
+                        "medium": "15px",
+                        "large": "30px",
+                        "xlarge": "60px"
+                    },
+                    "components": {
+                        "button": {
+                            "height": "40px",
+                            "min_width": "110px",
+                            "padding": "10px 20px",
+                            "border_radius": "0",
+                            "font_size": "19px"
+                        },
+                        "input": {
+                            "height": "40px",
+                            "padding": "5px",
+                            "border_width": "2px",
+                            "border_radius": "0",
+                            "font_size": "19px"
+                        },
+                        "card": {
+                            "padding": "20px",
+                            "border_width": "1px",
+                            "border_radius": "0",
+                            "background": "#FFFFFF"
+                        },
+                        "container": {
+                            "max_width": "960px",
+                            "padding": "0 15px"
+                        }
+                    },
+                    "accessibility": {
+                        "focus_visible": True,
+                        "focus_outline_width": "3px",
+                        "focus_outline_color": "#FFDD00",
+                        "high_contrast_mode": True
+                    }
                 }
             }
         }
@@ -498,6 +559,67 @@ async def explore_node(node_id: int, depth: int = 1):
                     "font_size": 14,
                     "min_width": 50,
                     "min_height": 50
+                },
+                "design_system": {
+                    "name": "govuk",
+                    "colors": {
+                        "primary": "#005EA5",
+                        "secondary": "#00823B",
+                        "text": "#0B0C0C",
+                        "background": "#FFFFFF",
+                        "border": "#B1B4B6",
+                        "focus": "#FFDD00",
+                        "error": "#D4351C",
+                        "success": "#00703C"
+                    },
+                    "typography": {
+                        "font_family": "GDS Transport, Arial, sans-serif",
+                        "font_size_base": "19px",
+                        "font_size_heading": "36px",
+                        "font_size_subheading": "24px",
+                        "line_height": "1.5",
+                        "font_weight_normal": "400",
+                        "font_weight_bold": "700"
+                    },
+                    "spacing": {
+                        "unit": "5px",
+                        "small": "10px",
+                        "medium": "15px",
+                        "large": "30px",
+                        "xlarge": "60px"
+                    },
+                    "components": {
+                        "button": {
+                            "height": "40px",
+                            "min_width": "110px",
+                            "padding": "10px 20px",
+                            "border_radius": "0",
+                            "font_size": "19px"
+                        },
+                        "input": {
+                            "height": "40px",
+                            "padding": "5px",
+                            "border_width": "2px",
+                            "border_radius": "0",
+                            "font_size": "19px"
+                        },
+                        "card": {
+                            "padding": "20px",
+                            "border_width": "1px",
+                            "border_radius": "0",
+                            "background": "#FFFFFF"
+                        },
+                        "container": {
+                            "max_width": "960px",
+                            "padding": "0 15px"
+                        }
+                    },
+                    "accessibility": {
+                        "focus_visible": True,
+                        "focus_outline_width": "3px",
+                        "focus_outline_color": "#FFDD00",
+                        "high_contrast_mode": True
+                    }
                 }
             }
         }
@@ -592,6 +714,67 @@ async def explore_relationships(
                     "font_size": 14,
                     "min_width": 50,
                     "min_height": 50
+                },
+                "design_system": {
+                    "name": "govuk",
+                    "colors": {
+                        "primary": "#005EA5",
+                        "secondary": "#00823B",
+                        "text": "#0B0C0C",
+                        "background": "#FFFFFF",
+                        "border": "#B1B4B6",
+                        "focus": "#FFDD00",
+                        "error": "#D4351C",
+                        "success": "#00703C"
+                    },
+                    "typography": {
+                        "font_family": "GDS Transport, Arial, sans-serif",
+                        "font_size_base": "19px",
+                        "font_size_heading": "36px",
+                        "font_size_subheading": "24px",
+                        "line_height": "1.5",
+                        "font_weight_normal": "400",
+                        "font_weight_bold": "700"
+                    },
+                    "spacing": {
+                        "unit": "5px",
+                        "small": "10px",
+                        "medium": "15px",
+                        "large": "30px",
+                        "xlarge": "60px"
+                    },
+                    "components": {
+                        "button": {
+                            "height": "40px",
+                            "min_width": "110px",
+                            "padding": "10px 20px",
+                            "border_radius": "0",
+                            "font_size": "19px"
+                        },
+                        "input": {
+                            "height": "40px",
+                            "padding": "5px",
+                            "border_width": "2px",
+                            "border_radius": "0",
+                            "font_size": "19px"
+                        },
+                        "card": {
+                            "padding": "20px",
+                            "border_width": "1px",
+                            "border_radius": "0",
+                            "background": "#FFFFFF"
+                        },
+                        "container": {
+                            "max_width": "960px",
+                            "padding": "0 15px"
+                        }
+                    },
+                    "accessibility": {
+                        "focus_visible": True,
+                        "focus_outline_width": "3px",
+                        "focus_outline_color": "#FFDD00",
+                        "high_contrast_mode": True
+                    }
                 }
             }
         }
