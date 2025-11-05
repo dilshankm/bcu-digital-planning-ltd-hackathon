@@ -42,6 +42,9 @@ Graph Schema:
     - To get unique patients: RETURN DISTINCT p (returns unique patient nodes by their node identity)
     - WRONG: RETURN DISTINCT p.firstName, p.lastName (this only returns unique name combinations, will miss patients with duplicate names - DO NOT USE THIS!)
     - CORRECT: RETURN DISTINCT p (always use this for patient queries)
+    - IMPORTANT: Patients can have conditions via HAS_CONDITION OR via Encounter-DIAGNOSED. Check both paths if needed:
+      * Example: MATCH (p:Patient)-[:HAS_CONDITION]->(c:Condition) WHERE toLower(c.description) CONTAINS 'diabetes' RETURN DISTINCT p
+      * OR: MATCH (p:Patient)-[:HAD_ENCOUNTER]->(e:Encounter)-[:DIAGNOSED]->(c:Condition) WHERE toLower(c.description) CONTAINS 'diabetes' RETURN DISTINCT p
     - Example CORRECT: MATCH (p:Patient)-[:HAS_CONDITION]->(c:Condition) WHERE toLower(c.description) CONTAINS 'diabetes' RETURN DISTINCT p
     - Example WRONG: MATCH (p:Patient)-[:HAS_CONDITION]->(c:Condition) WHERE toLower(c.description) CONTAINS 'diabetes' RETURN DISTINCT p.firstName, p.lastName (DO NOT USE - will return wrong count!)
 
@@ -162,9 +165,9 @@ Return ONLY the Cypher query, nothing else."""
                 result_data = json.dumps(results, indent=2)
             else:
                 # Patient records - extract ONLY firstName and lastName
-                # For display: show first 50 names if total > 50, otherwise show all
-                total_count = len(results)  # Keep original count for display
-                max_names_to_show = 50  # Show first 50 names max
+                # Limit names sent to LLM to reduce tokens, but keep accurate total count
+                total_count = len(results)  # Keep original count - this is the REAL count
+                max_names_to_show = 15  # Only send first 15 names to LLM (sample)
                 limited = results[:max_names_to_show] if total_count > max_names_to_show else results
                 
                 formatted_results = []
@@ -185,7 +188,7 @@ Return ONLY the Cypher query, nothing else."""
                             formatted_results.append(clean_record)
                 
                 # Format as simple JSON with ONLY names
-                # Always show the REAL total count, even if we limit the list to 50 names
+                # CRITICAL: Always show the REAL total count, even if we limit the list to 15 names
                 if total_count > max_names_to_show:
                     result_data = f"Found {total_count} total patients. Here are the first {len(formatted_results)} names:\n{json.dumps(formatted_results, indent=2)}"
                 else:
@@ -204,11 +207,15 @@ User's Question: {question}
 Data provided: {result_summary}
 
 IMPORTANT - How to read the data:
-- The FIRST LINE says "Found X total patients" - THAT NUMBER X IS THE ANSWER COUNT
-- The data is in JSON format with an array of patient records
+- The FIRST LINE says "Found X total patients" - THAT NUMBER X IS THE ACCURATE ANSWER COUNT (use this number!)
+- The JSON array below contains ONLY THE FIRST FEW names (first 15 names) - NOT ALL names
+- DO NOT count the JSON array - it only has a partial list of names
+- The total count "Found X total patients" is the REAL, ACCURATE count of ALL patients
+- If it says "Found 72 total patients. Here are the first 15 names:", then:
+  * The answer MUST say "There are 72 patients" (use the total count from "Found X total patients"!)
+  * The JSON array only has 15 names out of 72 total
+  * You should list about 10-15 names from the JSON array, then say "and [X-15] others"
 - Each record has "firstName" and "lastName" fields
-- If it says "Found 106 total patients", the answer MUST start with "There are 106 patients"
-- Extract firstName and lastName from EACH record in the JSON array to list patient names
 
 CRITICAL RULES - READ CAREFULLY:
 - DO NOT hallucinate or invent any information not in the data above
@@ -218,23 +225,27 @@ CRITICAL RULES - READ CAREFULLY:
 - ONLY use facts, numbers, names explicitly in the data above
 - Answer as if you naturally know this information, not as if you're reading it from somewhere
 
-Answer Format - FOLLOW EXACTLY:
-STEP 1: Look at the FIRST LINE of the data. It says "Found X total patients" - THAT X IS YOUR ANSWER COUNT!
-STEP 2: If X is 50 or fewer, list ALL names from the JSON array: "There are X patients: [all X names]"
-STEP 3: If X is more than 50, list first 50 names: "There are X patients: [first 50 names from JSON], ... and (X-50) others"
-STEP 4: Start with: "There are X patients" where X is from "Found X total patients"
-- Use plain English, as if talking to a friend
+Answer Format - Write Naturally Like a Human:
+STEP 1: Look at the FIRST LINE of the data. It says "Found X total patients" - THAT X IS YOUR ANSWER COUNT (use this number, NOT the JSON array count!)
+STEP 2: Write a natural, conversational sentence that flows well
+STEP 3: If X is 15 or fewer, list ALL names from the JSON array: "There are X patients: [all X names in a natural list with 'and' before the last name]"
+STEP 4: If X is more than 15, list 10-15 names from the sample JSON array: "There are X patients. These include [10-15 names from the sample], and [X-15] others."
+STEP 5: Start with: "There are X patients" where X is from "Found X total patients" - NOT from counting the JSON array!
+- Write like you're talking to a friend - use natural, flowing English
+- Use "and" before the last name when listing all names
+- Use "These include" or "They include" when listing partial names
 - Format names as: firstName lastName (e.g., "Kyong970 Bechtelar572")
-- Be brief and clear
+- Use proper punctuation and natural phrasing
 - NEVER mention where the data came from
 
 CRITICAL EXAMPLES:
-- Data says "Found 106 total patients" → Answer: "There are 106 patients: [first 50 names], ... and 56 others."
-- Data says "Found 20 total patients" → Answer: "There are 20 patients: [all 20 names]."
-- Data says "Found 106 total patients" → WRONG: "There are 0 patients" or "There are 50 patients"
-- Data says "Found 106 total patients" → WRONG: "There are 17 patients"
+- Data says "Found 72 total patients. Here are the first 15 names:" → Answer: "There are 72 patients with diabetes. These include Kyong970 Bechtelar572, David908 Adams676, Ranae267 Donnelly343, and 69 others." (use 72, not 15!)
+- Data says "Found 20 total patients. Here are their names:" → Answer: "There are 20 patients: Kyong970 Bechtelar572, David908 Adams676, [all 20 names from JSON], and [last name]."
+- Data says "Found 72 total patients. Here are the first 15 names:" → WRONG: "There are 15 patients" (you counted the JSON array - WRONG!)
+- Data says "Found 72 total patients. Here are the first 15 names:" → CORRECT: "There are 72 patients" (use the total count from "Found X total patients"!)
 
-YOU MUST USE THE NUMBER FROM "Found X total patients" - DO NOT COUNT THE JSON ARRAY!
+YOU MUST USE THE NUMBER FROM "Found X total patients" - DO NOT COUNT THE JSON ARRAY! The JSON array only has the first few names!
+Write naturally - don't just list names with commas. Make it sound like a real human answer!
 
 Provide ONLY the direct, natural answer now:"""
 
