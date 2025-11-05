@@ -240,17 +240,43 @@ def synthesizer_agent(state: GraphState) -> GraphState:
                 if isinstance(r, dict):
                     r = {k: v for k, v in r.items() if k not in ['embedding', '_text_repr']}
                     
-                    # Patient record - extract only firstName, lastName, id
+                    # Handle different result formats:
+                    # 1. Direct properties: {'firstName': 'John', 'lastName': 'Doe'}
+                    # 2. Prefixed properties: {'p.firstName': 'John', 'p.lastName': 'Doe', 'Procedure.description': '...'}
+                    # 3. Nested nodes: {'p': {...}, 'Procedure': {...}}
                     clean_r = {}
+                    
+                    # Check for direct firstName/lastName
                     if 'firstName' in r:
                         clean_r['firstName'] = r['firstName']
                     if 'lastName' in r:
                         clean_r['lastName'] = r['lastName']
-                    if 'id' in r:
-                        clean_r['id'] = r['id']
-                    # Include description if it's a Condition/Procedure/Observation
-                    if 'description' in r:
-                        clean_r['description'] = r['description']
+                    
+                    # Check for prefixed properties (e.g., 'p.firstName', 'Procedure.description')
+                    for key, value in r.items():
+                        if key.endswith('.firstName') or key.endswith('.lastName'):
+                            field_name = key.split('.')[-1]
+                            clean_r[field_name] = value
+                        elif key.endswith('.description'):
+                            clean_r['description'] = value
+                        elif key == 'id' or key.endswith('.id'):
+                            clean_r['id'] = value
+                    
+                    # If still no data, check if values are nested dicts (e.g., {'p': {...}, 'Procedure': {...}})
+                    if not clean_r and len(r) > 1:
+                        # Multiple keys - might be {'p': {...}, 'Procedure': {...}}
+                        for key, value in r.items():
+                            if isinstance(value, dict):
+                                # Extract from nested dict
+                                if 'firstName' in value:
+                                    clean_r['firstName'] = value['firstName']
+                                if 'lastName' in value:
+                                    clean_r['lastName'] = value['lastName']
+                                if 'description' in value:
+                                    clean_r['description'] = value['description']
+                                if 'id' in value:
+                                    clean_r['id'] = value['id']
+                    
                     if clean_r:  # Only add if we extracted something
                         clean_results.append(clean_r)
     
