@@ -223,7 +223,7 @@ def synthesizer_agent(state: GraphState) -> GraphState:
         # Check if this is aggregated data (COUNT, SUM, etc.) or a patient record
         if isinstance(r, dict):
             # Check if this is aggregated data BEFORE extracting nested values
-            aggregate_keywords = ['count', 'number', 'total', 'sum', 'avg', 'min', 'max']
+            aggregate_keywords = ['count', 'number', 'total', 'sum', 'avg', 'average', 'min', 'max', 'frequency']
             has_aggregate = any(any(keyword in key.lower() for keyword in aggregate_keywords)
                               for key in r.keys() if isinstance(key, str))
             
@@ -252,7 +252,7 @@ def synthesizer_agent(state: GraphState) -> GraphState:
                     if 'lastName' in r:
                         clean_r['lastName'] = r['lastName']
                     
-                    # Check for prefixed properties (e.g., 'p.firstName', 'Procedure.description')
+                    # Check for prefixed properties (e.g., 'p.firstName', 'Procedure.description', 'e.id')
                     for key, value in r.items():
                         if key.endswith('.firstName') or key.endswith('.lastName'):
                             field_name = key.split('.')[-1]
@@ -261,24 +261,63 @@ def synthesizer_agent(state: GraphState) -> GraphState:
                             clean_r['description'] = value
                         elif key == 'id' or key.endswith('.id'):
                             clean_r['id'] = value
+                        elif key.endswith('.start') or key.endswith('.stop'):
+                            clean_r[key.split('.')[-1]] = value
+                        elif key.endswith('.reasonDescription'):
+                            clean_r['reason'] = value
                     
-                    # If still no data, check if values are nested dicts (e.g., {'p': {...}, 'Procedure': {...}})
-                    if not clean_r and len(r) > 1:
-                        # Multiple keys - might be {'p': {...}, 'Procedure': {...}}
-                        for key, value in r.items():
-                            if isinstance(value, dict):
-                                # Extract from nested dict
-                                if 'firstName' in value:
-                                    clean_r['firstName'] = value['firstName']
-                                if 'lastName' in value:
-                                    clean_r['lastName'] = value['lastName']
-                                if 'description' in value:
-                                    clean_r['description'] = value['description']
-                                if 'id' in value:
-                                    clean_r['id'] = value['id']
+                    # If still no data, check if values are nested dicts (e.g., {'p': {...}, 'Procedure': {...}, 'e': {...}})
+                    if not clean_r and len(r) > 0:
+                        # Check if single key is a node (e.g., {'e': {...}})
+                        if len(r) == 1:
+                            node_value = list(r.values())[0]
+                            if isinstance(node_value, dict):
+                                # Extract common fields from any node type
+                                if 'firstName' in node_value:
+                                    clean_r['firstName'] = node_value['firstName']
+                                if 'lastName' in node_value:
+                                    clean_r['lastName'] = node_value['lastName']
+                                if 'description' in node_value:
+                                    clean_r['description'] = node_value['description']
+                                if 'id' in node_value:
+                                    clean_r['id'] = node_value['id']
+                                if 'start' in node_value:
+                                    clean_r['start'] = node_value['start']
+                                if 'stop' in node_value:
+                                    clean_r['stop'] = node_value['stop']
+                                if 'reasonDescription' in node_value:
+                                    clean_r['reason'] = node_value['reasonDescription']
+                        # Multiple keys - might be {'p': {...}, 'Procedure': {...}, 'e': {...}}
+                        elif len(r) > 1:
+                            for key, value in r.items():
+                                if isinstance(value, dict):
+                                    # Extract from nested dict
+                                    if 'firstName' in value:
+                                        clean_r['firstName'] = value['firstName']
+                                    if 'lastName' in value:
+                                        clean_r['lastName'] = value['lastName']
+                                    if 'description' in value:
+                                        clean_r['description'] = value['description']
+                                    if 'id' in value:
+                                        clean_r['id'] = value['id']
+                                    if 'start' in value:
+                                        clean_r['start'] = value['start']
+                                    if 'stop' in value:
+                                        clean_r['stop'] = value['stop']
+                                    if 'reasonDescription' in value:
+                                        clean_r['reason'] = value['reasonDescription']
                     
                     if clean_r:  # Only add if we extracted something
                         clean_results.append(clean_r)
+                    else:
+                        # If we still have no clean_r but r has data, include a minimal version
+                        # This handles cases where nodes don't have standard fields
+                        if isinstance(r, dict) and r:
+                            # Include at least the raw dict keys to help LLM understand structure
+                            minimal = {k: str(v)[:50] if not isinstance(v, (dict, list)) else type(v).__name__ 
+                                      for k, v in list(r.items())[:5]}  # Limit to first 5 fields
+                            if minimal:
+                                clean_results.append(minimal)
     
     truncated_context = context[:3000] if len(context) > 3000 else context
     
@@ -418,17 +457,37 @@ def planner_decide(state: GraphState) -> GraphState:
 
     print(f"\n🎯 [PLANNER] Step {step}/{max_steps}")
 
+    # Get state variables before checking step limit
+    question = state.get("question", "")
+    context = state.get("context", "")
+    cypher = state.get("cypher_query", "")
+    results = state.get("neo4j_results", [])
+    
     if step > max_steps:
         state["decision"] = "end"
         state["confidence"] = 0.5
         print(f"   ⚠️  Step budget exceeded. Ending workflow.")
         _append_message(state, "planner", f"Step budget exceeded ({step}>{max_steps}). Ending.")
+        
+        # If we have results but no answer yet, try to synthesize one
+        if not state.get("final_answer") and results is not None:
+            if len(results) == 0:
+                state["final_answer"] = f"I couldn't find any information matching your question: '{question}'. No records match the specific criteria."
+            else:
+                # Try to synthesize answer from existing results
+                try:
+                    limited_results = results[:50] if len(results) > 50 else results
+                    clean_results = []
+                    for r in limited_results:
+                        if isinstance(r, dict):
+                            r_clean = {k: v for k, v in r.items() if k not in ['embedding', '_text_repr']}
+                            clean_results.append(r_clean)
+                    answer = llm_service.interpret_results(question, clean_results)
+                    state["final_answer"] = answer if answer else f"I found {len(results)} matching records."
+                except:
+                    state["final_answer"] = f"I found {len(results)} matching records but couldn't synthesize a complete answer."
+        
         return state
-
-    question = state.get("question", "")
-    context = state.get("context", "")
-    cypher = state.get("cypher_query", "")
-    results = state.get("neo4j_results", [])
     refinement_count = state.get("refinement_count", 0)
     error = state.get("error", "")
 
