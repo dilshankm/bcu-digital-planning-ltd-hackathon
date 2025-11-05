@@ -67,27 +67,41 @@ Return ONLY the Cypher query, nothing else."""
         if not results:
             result_data = "No matching records found."
         else:
-            # Extract ONLY firstName and lastName - nothing else
-            limited = results[:50] if len(results) > 50 else results
-            formatted_results = []
-            for item in limited:
-                record = item
-                # If single-key nested (e.g., {'p': {...}}), extract inner dict
-                if isinstance(item, dict) and len(item) == 1:
-                    record = list(item.values())[0]
-                
-                # Extract ONLY name fields
-                if isinstance(record, dict):
-                    clean_record = {}
-                    if 'firstName' in record:
-                        clean_record['firstName'] = record['firstName']
-                    if 'lastName' in record:
-                        clean_record['lastName'] = record['lastName']
-                    if clean_record:
-                        formatted_results.append(clean_record)
+            # Check if results contain aggregated data (like COUNT) or patient records
+            first_result = results[0] if results else {}
             
-            # Format as simple JSON with ONLY names
-            result_data = f"Found {len(results)} total patients. Here are their names:\n{json.dumps(formatted_results, indent=2)}"
+            # If it's aggregated data (e.g., {"numberOfPatients": 100}), pass it directly
+            aggregate_keywords = ['count', 'number', 'total', 'sum', 'avg', 'min', 'max']
+            has_aggregate = isinstance(first_result, dict) and any(
+                any(keyword in key.lower() for keyword in aggregate_keywords)
+                for key in first_result.keys() if isinstance(key, str)
+            )
+            
+            if has_aggregate:
+                # Aggregated data - pass as-is
+                result_data = json.dumps(results, indent=2)
+            else:
+                # Patient records - extract ONLY firstName and lastName
+                limited = results[:50] if len(results) > 50 else results
+                formatted_results = []
+                for item in limited:
+                    record = item
+                    # If single-key nested (e.g., {'p': {...}}), extract inner dict
+                    if isinstance(item, dict) and len(item) == 1:
+                        record = list(item.values())[0]
+                    
+                    # Extract ONLY name fields
+                    if isinstance(record, dict):
+                        clean_record = {}
+                        if 'firstName' in record:
+                            clean_record['firstName'] = record['firstName']
+                        if 'lastName' in record:
+                            clean_record['lastName'] = record['lastName']
+                        if clean_record:
+                            formatted_results.append(clean_record)
+                
+                # Format as simple JSON with ONLY names
+                result_data = f"Found {len(results)} total patients. Here are their names:\n{json.dumps(formatted_results, indent=2)}"
         
         result_summary = result_data
         

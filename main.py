@@ -9,6 +9,17 @@ from services.neo4j_service import Neo4jService
 from services.csv_import_service import CSVImportService
 
 
+def _remove_embeddings(obj):
+    """Recursively remove embedding fields from any nested structure"""
+    if isinstance(obj, dict):
+        return {k: _remove_embeddings(v) for k, v in obj.items() 
+                if k not in ['embedding', '_text_repr']}
+    elif isinstance(obj, list):
+        return [_remove_embeddings(item) for item in obj]
+    else:
+        return obj
+
+
 def _get_node_display_name(node: Dict[str, Any]) -> str:
     """Generate a human-readable display name for a node"""
     label = node.get("label", "Unknown")
@@ -180,12 +191,22 @@ async def ask_question(q: Question, response: Response):
         # Enrich traversal paths with readable node information
         nodes_dict = {}
         nodes_used = result.get("subgraph", {}).get("nodes", [])
+        
+        # Remove embeddings from nodes to avoid huge response size
+        clean_nodes_used = []
         for node in nodes_used:
             node_id = str(node.get("id", ""))
+            clean_node = {k: v for k, v in node.items() if k not in ['embedding', '_text_repr']}
+            # Also clean properties dict if it exists
+            if 'properties' in clean_node and isinstance(clean_node['properties'], dict):
+                clean_node['properties'] = {k: v for k, v in clean_node['properties'].items() 
+                                           if k not in ['embedding', '_text_repr']}
+            clean_nodes_used.append(clean_node)
+            
             nodes_dict[node_id] = {
-                "label": node.get("label", "Unknown"),
-                "properties": node.get("properties", {}),
-                "display_name": _get_node_display_name(node)
+                "label": clean_node.get("label", "Unknown"),
+                "properties": clean_node.get("properties", {}),
+                "display_name": _get_node_display_name(clean_node)
             }
         
         # Enrich relationships with readable information
@@ -208,7 +229,7 @@ async def ask_question(q: Question, response: Response):
                 "path_display": f"{start_node['display_name']} ({start_node['label']}) --{rel.get('type', 'UNKNOWN')}--> {end_node['display_name']} ({end_node['label']})"
             })
         
-        return {
+        response = {
             "question": result["question"],
             "cypher_query": result.get("cypher_query", ""),
             "answer": result["final_answer"],
@@ -216,12 +237,15 @@ async def ask_question(q: Question, response: Response):
             "session_id": session_id,
             # Stretch Goals: Visualization and Explainability
             "traversal_paths": enriched_paths,
-            "nodes_used": nodes_used,
+            "nodes_used": clean_nodes_used,
             "similar_nodes_found": result.get("similar_nodes", []),
             "plan": result.get("plan", ""),
             "steps_taken": result.get("step", 0),
             "confidence": result.get("confidence", 0.0)
         }
+        
+        # Recursively remove ALL embeddings from response
+        return _remove_embeddings(response)
     except asyncio.TimeoutError:
         error_msg = "Request timed out. The query may be too complex. Please try a simpler question."
         if session_id:

@@ -220,18 +220,39 @@ def synthesizer_agent(state: GraphState) -> GraphState:
     limited_results = results[:100] if len(results) > 100 else results
     clean_results = []
     for r in limited_results:
-        # Extract only firstName, lastName, and id - enough for user-friendly answers
-        clean_r = {}
-        if 'firstName' in r:
-            clean_r['firstName'] = r['firstName']
-        if 'lastName' in r:
-            clean_r['lastName'] = r['lastName']
-        if 'id' in r:
-            clean_r['id'] = r['id']
-        # Include description if it's a Condition/Procedure/Observation
-        if 'description' in r:
-            clean_r['description'] = r['description']
-        clean_results.append(clean_r)
+        # Check if this is aggregated data (COUNT, SUM, etc.) or a patient record
+        if isinstance(r, dict):
+            # Check if this is aggregated data BEFORE extracting nested values
+            aggregate_keywords = ['count', 'number', 'total', 'sum', 'avg', 'min', 'max']
+            has_aggregate = any(any(keyword in key.lower() for keyword in aggregate_keywords)
+                              for key in r.keys() if isinstance(key, str))
+            
+            if has_aggregate:
+                # Aggregated result - pass through as-is
+                clean_results.append(r)
+            else:
+                # Not aggregated - check if it's a nested node like {'p': {...}}
+                if len(r) == 1:
+                    # Extract the nested node (e.g., 'p', 'c', 'e')
+                    r = list(r.values())[0]
+                
+                # CRITICAL: Remove embeddings after extraction
+                if isinstance(r, dict):
+                    r = {k: v for k, v in r.items() if k not in ['embedding', '_text_repr']}
+                    
+                    # Patient record - extract only firstName, lastName, id
+                    clean_r = {}
+                    if 'firstName' in r:
+                        clean_r['firstName'] = r['firstName']
+                    if 'lastName' in r:
+                        clean_r['lastName'] = r['lastName']
+                    if 'id' in r:
+                        clean_r['id'] = r['id']
+                    # Include description if it's a Condition/Procedure/Observation
+                    if 'description' in r:
+                        clean_r['description'] = r['description']
+                    if clean_r:  # Only add if we extracted something
+                        clean_results.append(clean_r)
     
     truncated_context = context[:3000] if len(context) > 3000 else context
     
