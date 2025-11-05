@@ -217,24 +217,29 @@ def synthesizer_agent(state: GraphState) -> GraphState:
     # Build comprehensive context from graph results and subgraph
     # Extract ONLY essential fields to avoid token overflow
     # Even 10 full patient records = 48K tokens! We only need names for listing
-    # Don't limit results - pass all to LLM (it will handle truncation in answer)
-    limited_results = results
+    # Limit to reasonable number to avoid token overflow, but pass enough for accurate counts
+    # For patient lists, we extract only firstName/lastName so 200 records is ~10K tokens (safe)
+    limited_results = results[:200] if len(results) > 200 else results
     clean_results = []
     for r in limited_results:
         # Check if this is aggregated data (COUNT, SUM, etc.) or a patient record
         if isinstance(r, dict):
             # Check if this is aggregated data BEFORE extracting nested values
-            # IMPORTANT: Don't flag as aggregate if it has firstName/lastName - these are patient records, not aggregates
-            has_patient_fields = any(key.lower() in ['firstname', 'lastname', 'p.firstname', 'p.lastname'] 
-                                     for key in r.keys() if isinstance(key, str))
+            # IMPORTANT: Don't flag as aggregate if it has firstName/lastName fields (even with prefix like p.firstName)
+            # Aggregate results only have count/sum/avg fields, never patient names
+            has_patient_fields = any(
+                'firstname' in key.lower() or 'lastname' in key.lower() 
+                for key in r.keys() if isinstance(key, str)
+            )
             
             aggregate_keywords = ['count', 'number', 'total', 'sum', 'avg', 'average', 'min', 'max', 'frequency']
             has_aggregate = any(any(keyword in key.lower() for keyword in aggregate_keywords)
                               for key in r.keys() if isinstance(key, str))
             
             # Only treat as aggregate if it has aggregate keywords AND no patient fields
+            # Records with conditionCount + firstName/lastName are patient records, not aggregates
             if has_aggregate and not has_patient_fields:
-                # Aggregated result - pass through as-is
+                # True aggregate result (like {"numberOfPatients": 100}) - pass through as-is
                 clean_results.append(r)
             else:
                 # Not aggregated - check if it's a nested node like {'p': {...}}

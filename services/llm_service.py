@@ -152,8 +152,10 @@ Return ONLY the Cypher query, nothing else."""
                 result_data = json.dumps(results, indent=2)
             else:
                 # Patient records - extract ONLY firstName and lastName
-                # Don't limit here - pass all results (LLM will handle truncation in answer format)
-                limited = results
+                # Limit to 200 records max (only names = ~10K tokens, safe)
+                # But include total count so LLM knows the real number
+                limited = results[:200] if len(results) > 200 else results
+                total_count = len(results)  # Keep original count for display
                 formatted_results = []
                 for item in limited:
                     record = item
@@ -172,7 +174,8 @@ Return ONLY the Cypher query, nothing else."""
                             formatted_results.append(clean_record)
                 
                 # Format as simple JSON with ONLY names
-                result_data = f"Found {len(results)} total patients. Here are their names:\n{json.dumps(formatted_results, indent=2)}"
+                # Always show the REAL total count, even if we limit the list
+                result_data = f"Found {total_count} total patients. Here are their names (showing first {len(formatted_results)}):\n{json.dumps(formatted_results, indent=2)}"
         
         result_summary = result_data
         
@@ -197,20 +200,18 @@ CRITICAL RULES - READ CAREFULLY:
 - Answer as if you naturally know this information, not as if you're reading it from somewhere
 
 Answer Format - FOLLOW EXACTLY:
-- If asked "Which patients...", list ALL patient names from the JSON data
-- COUNT the total number of records in the JSON array - that's the correct count
-- If there are 50 or fewer results, list ALL names: "There are 106 patients: John Smith, Jane Doe, Bob Johnson, ..." (all 106 names)
-- If there are more than 50 results, give a count AND list first 50 names: "200 patients have diabetes: John Smith, Jane Doe, Bob Johnson, ... and 150 others"
-- Start with the direct fact: "There are 106 patients" NOT "Based on the data, there are 106 patients"
+- The data says "Found X total patients" - USE THAT NUMBER X as the count
+- If X is 50 or fewer, list ALL names: "There are X patients: [all X names]"
+- If X is more than 50, list first 50 names: "There are X patients: [first 50 names], ... and (X-50) others"
+- Start with the direct fact: "There are X patients" where X is the number from "Found X total patients"
 - Use plain English, as if talking to a friend
 - Format names as: firstName lastName (e.g., "Kyong970 Bechtelar572")
 - Be brief and clear
 - NEVER mention where the data came from
-- CRITICAL: Count the actual number of records in the JSON array. If JSON has 106 records, say "106 patients" not "14 patients"!
+- CRITICAL: Use the number from "Found X total patients" - if it says "Found 106 total patients", say "106 patients" not "14"!
 
-Example GOOD answer (106 patients): "There are 106 patients with more than three chronic conditions: [list all 106 names]."
-Example GOOD answer (200 patients): "There are 200 patients with diabetes: [first 50 names], ... and 150 others."
-Example BAD answer: "There are 14 patients: [only lists 6]" when JSON has 106 records - COUNT THE RECORDS!
+Example GOOD answer: "There are 106 patients with more than three chronic conditions: [first 50 names], ... and 56 others."
+Example BAD answer: "There are 14 patients" when data says "Found 106 total patients"
 
 Provide ONLY the direct, natural answer now:"""
 
