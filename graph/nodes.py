@@ -217,17 +217,23 @@ def synthesizer_agent(state: GraphState) -> GraphState:
     # Build comprehensive context from graph results and subgraph
     # Extract ONLY essential fields to avoid token overflow
     # Even 10 full patient records = 48K tokens! We only need names for listing
-    limited_results = results[:100] if len(results) > 100 else results
+    # Don't limit results - pass all to LLM (it will handle truncation in answer)
+    limited_results = results
     clean_results = []
     for r in limited_results:
         # Check if this is aggregated data (COUNT, SUM, etc.) or a patient record
         if isinstance(r, dict):
             # Check if this is aggregated data BEFORE extracting nested values
+            # IMPORTANT: Don't flag as aggregate if it has firstName/lastName - these are patient records, not aggregates
+            has_patient_fields = any(key.lower() in ['firstname', 'lastname', 'p.firstname', 'p.lastname'] 
+                                     for key in r.keys() if isinstance(key, str))
+            
             aggregate_keywords = ['count', 'number', 'total', 'sum', 'avg', 'average', 'min', 'max', 'frequency']
             has_aggregate = any(any(keyword in key.lower() for keyword in aggregate_keywords)
                               for key in r.keys() if isinstance(key, str))
             
-            if has_aggregate:
+            # Only treat as aggregate if it has aggregate keywords AND no patient fields
+            if has_aggregate and not has_patient_fields:
                 # Aggregated result - pass through as-is
                 clean_results.append(r)
             else:

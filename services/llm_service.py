@@ -152,7 +152,8 @@ Return ONLY the Cypher query, nothing else."""
                 result_data = json.dumps(results, indent=2)
             else:
                 # Patient records - extract ONLY firstName and lastName
-                limited = results[:50] if len(results) > 50 else results
+                # Don't limit here - pass all results (LLM will handle truncation in answer format)
+                limited = results
                 formatted_results = []
                 for item in limited:
                     record = item
@@ -197,18 +198,19 @@ CRITICAL RULES - READ CAREFULLY:
 
 Answer Format - FOLLOW EXACTLY:
 - If asked "Which patients...", list ALL patient names from the JSON data
-- If there are 20 or fewer results, list ALL names: "There are 14 patients: John Smith, Jane Doe, Bob Johnson, ..." (all 14 names)
-- If there are more than 20 results, give a count AND list first 20 names: "72 patients have diabetes: John Smith, Jane Doe, Bob Johnson, ... and 52 others"
-- Start with the direct fact: "There are 14 patients" NOT "Based on the data, there are 14 patients"
+- COUNT the total number of records in the JSON array - that's the correct count
+- If there are 50 or fewer results, list ALL names: "There are 106 patients: John Smith, Jane Doe, Bob Johnson, ..." (all 106 names)
+- If there are more than 50 results, give a count AND list first 50 names: "200 patients have diabetes: John Smith, Jane Doe, Bob Johnson, ... and 150 others"
+- Start with the direct fact: "There are 106 patients" NOT "Based on the data, there are 106 patients"
 - Use plain English, as if talking to a friend
 - Format names as: firstName lastName (e.g., "Kyong970 Bechtelar572")
 - Be brief and clear
 - NEVER mention where the data came from
-- IMPORTANT: If the data says "Found 14 total patients", you MUST list all 14 names, not just 6!
+- CRITICAL: Count the actual number of records in the JSON array. If JSON has 106 records, say "106 patients" not "14 patients"!
 
-Example GOOD answer (14 patients): "There are 14 patients with more than three chronic conditions: Sau887 Hammes673, Gay359 Marquardt819, Hilaria948 Conroy74, Rickey821 Mante251, Jerald662 Herman763, Gerald181 O'Kon634, [and all remaining 8 names]."
-Example GOOD answer (72 patients): "There are 72 patients with diabetes: Kyong970 Bechtelar572, David908 Adams676, ... and 70 others."
-Example BAD answer: "There are 14 patients: [only lists 6]" or "There are 0 patients" (when records are provided in JSON)
+Example GOOD answer (106 patients): "There are 106 patients with more than three chronic conditions: [list all 106 names]."
+Example GOOD answer (200 patients): "There are 200 patients with diabetes: [first 50 names], ... and 150 others."
+Example BAD answer: "There are 14 patients: [only lists 6]" when JSON has 106 records - COUNT THE RECORDS!
 
 Provide ONLY the direct, natural answer now:"""
 
