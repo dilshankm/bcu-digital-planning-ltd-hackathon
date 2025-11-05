@@ -397,28 +397,6 @@ async def explore_nodes(
                         "position": "top-right",
                         "show": True
                     }
-                },
-                "filters_panel": {
-                    "show": True,
-                    "position": "inside-canvas",
-                    "collapsible": True,
-                    "title": "Filters",
-                    "filters": [
-                        {
-                            "type": "node_types",
-                            "label": "Node Types",
-                            "options": [{"label": item["label"], "count": item["count"]} 
-                                       for item in node_type_counts if item.get("label")]
-                        }
-                    ],
-                    "shortcuts": {
-                        "+": "Zoom in",
-                        "-": "Zoom out",
-                        "0": "Fit to view",
-                        "R": "Reset view",
-                        "Space": "Pause animation",
-                        "Esc": "Deselect"
-                    }
                 }
             }
         }
@@ -575,28 +553,6 @@ async def explore_relationships(
                     "buttons": {
                         "position": "top-right",
                         "show": True
-                    }
-                },
-                "filters_panel": {
-                    "show": True,
-                    "position": "inside-canvas",
-                    "collapsible": True,
-                    "title": "Filters",
-                    "filters": [
-                        {
-                            "type": "relationship_types",
-                            "label": "Relationship Types",
-                            "options": [{"label": item["type"], "count": item["count"]} 
-                                       for item in rel_type_counts if item.get("type")]
-                        }
-                    ],
-                    "shortcuts": {
-                        "+": "Zoom in",
-                        "-": "Zoom out",
-                        "0": "Fit to view",
-                        "R": "Reset view",
-                        "Space": "Pause animation",
-                        "Esc": "Deselect"
                     }
                 }
             }
