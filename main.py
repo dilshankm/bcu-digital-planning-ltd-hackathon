@@ -338,14 +338,6 @@ async def explore_nodes(
         total_result = neo4j_service.execute_query(count_query)
         total_count = total_result[0].get("total", 0) if total_result else 0
         
-        # Get node type counts for filters
-        node_type_counts_query = """
-        MATCH (n)
-        RETURN labels(n)[0] as label, count(n) as count
-        ORDER BY count DESC
-        """
-        node_type_counts = neo4j_service.execute_query(node_type_counts_query)
-        
         # Get paginated results
         query = base_query + where_clause + """
         RETURN id(n) as id, labels(n) as labels, properties(n) as properties 
@@ -500,14 +492,6 @@ async def explore_relationships(
         count_query = base_query + " RETURN count(r) as total"
         total_result = neo4j_service.execute_query(count_query)
         total_count = total_result[0].get("total", 0) if total_result else 0
-        
-        # Get relationship type counts for filters
-        rel_type_counts_query = """
-        MATCH ()-[r]->()
-        RETURN type(r) as type, count(r) as count
-        ORDER BY count DESC
-        """
-        rel_type_counts = neo4j_service.execute_query(rel_type_counts_query)
         
         # Get paginated results
         query = base_query + """
