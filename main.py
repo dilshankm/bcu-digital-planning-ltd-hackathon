@@ -392,6 +392,9 @@ async def explore_nodes(
                 },
                 "legend": {
                     "show": False
+                },
+                "filters": {
+                    "show": False
                 }
             }
         }
@@ -467,6 +470,9 @@ async def explore_node(node_id: int, depth: int = 1):
                     }
                 },
                 "legend": {
+                    "show": False
+                },
+                "filters": {
                     "show": False
                 }
             }
@@ -546,6 +552,9 @@ async def explore_relationships(
                     }
                 },
                 "legend": {
+                    "show": False
+                },
+                "filters": {
                     "show": False
                 }
             }
