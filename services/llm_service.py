@@ -61,7 +61,10 @@ Graph Schema:
     - For blood pressure: WHERE toLower(o.description) CONTAINS 'blood pressure'
     - For cardiac/heart: Use toLower() with CONTAINS: WHERE toLower(e.reasonDescription) CONTAINS 'cardiac' OR toLower(e.reasonDescription) CONTAINS 'heart'
     - IMPORTANT: When using toLower() on properties that might be NULL, check NULL first: WHERE o.category IS NOT NULL AND toLower(o.category) = 'vital-signs'
-    - For Observation category: Check if property exists before using toLower: WHERE o.category IS NOT NULL AND toLower(o.category) = 'vital-signs' OR toLower(o.description) CONTAINS 'blood pressure'
+    - For Observation category: ALWAYS check NULL first! Use: WHERE (o.category IS NOT NULL AND toLower(o.category) = 'vital-signs') OR toLower(o.description) CONTAINS 'blood pressure'
+    - NEVER use toLower() directly on properties that might be NULL without checking first
+    - Example CORRECT: WHERE (o.category IS NOT NULL AND toLower(o.category) = 'vital-signs') OR toLower(o.description) CONTAINS 'blood pressure'
+    - Example WRONG: WHERE toLower(o.category) = 'vital-signs' AND toLower(o.description) CONTAINS 'blood pressure' (will fail if category is NULL)
 
     ONLY USE RELATIONSHIPS THAT EXIST:
     - Available: HAD_ENCOUNTER, HAS_CONDITION, DIAGNOSED, UNDERWENT, HAD_PROCEDURE, HAS_OBSERVATION, RECORDED_OBSERVATION
