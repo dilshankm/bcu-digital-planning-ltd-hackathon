@@ -348,6 +348,9 @@ def synthesizer_agent(state: GraphState) -> GraphState:
     # Use simple LLM interpretation directly - more reliable than DSPy multi-agent
     # DSPy was too cautious and often returned vague/empty answers even with good data
     print(f"   📊 Passing {len(clean_results)} results to LLM.")
+    if clean_results:
+        print(f"   🔍 Sample clean result (first): {clean_results[0] if clean_results else 'NONE'}")
+        print(f"   🔍 Clean results have names: {any('firstName' in str(r) or 'lastName' in str(r) for r in clean_results[:3])}")
     try:
         answer = llm_service.interpret_results(question, clean_results)
         print(f"   🤖 LLM returned: '{answer[:200] if answer else 'EMPTY/NONE'}'")
