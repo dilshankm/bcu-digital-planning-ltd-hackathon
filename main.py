@@ -374,7 +374,23 @@ async def explore_nodes(
             "count": len(formatted_nodes),
             "total": total_count,
             "skip": skip,
-            "limit": limit
+            "limit": limit,
+            "ui_controls": {
+                "zoom": {
+                    "shortcuts": {
+                        "+": "Zoom in",
+                        "-": "Zoom out",
+                        "0": "Fit to view",
+                        "R": "Reset view",
+                        "Space": "Pause animation",
+                        "Esc": "Deselect"
+                    },
+                    "buttons": {
+                        "position": "top-right",
+                        "show": True
+                    }
+                }
+            }
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -431,7 +447,23 @@ async def explore_node(node_id: int, depth: int = 1):
             "relationships": formatted_rels,
             "depth": depth,
             "node_count": len(formatted_nodes),
-            "relationship_count": len(formatted_rels)
+            "relationship_count": len(formatted_rels),
+            "ui_controls": {
+                "zoom": {
+                    "shortcuts": {
+                        "+": "Zoom in",
+                        "-": "Zoom out",
+                        "0": "Fit to view",
+                        "R": "Reset view",
+                        "Space": "Pause animation",
+                        "Esc": "Deselect"
+                    },
+                    "buttons": {
+                        "position": "top-right",
+                        "show": True
+                    }
+                }
+            }
         }
     except HTTPException:
         raise
@@ -491,7 +523,23 @@ async def explore_relationships(
             "count": len(formatted_rels),
             "total": total_count,
             "skip": skip,
-            "limit": limit
+            "limit": limit,
+            "ui_controls": {
+                "zoom": {
+                    "shortcuts": {
+                        "+": "Zoom in",
+                        "-": "Zoom out",
+                        "0": "Fit to view",
+                        "R": "Reset view",
+                        "Space": "Pause animation",
+                        "Esc": "Deselect"
+                    },
+                    "buttons": {
+                        "position": "top-right",
+                        "show": True
+                    }
+                }
+            }
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
