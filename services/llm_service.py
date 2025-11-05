@@ -196,16 +196,19 @@ CRITICAL RULES - READ CAREFULLY:
 - Answer as if you naturally know this information, not as if you're reading it from somewhere
 
 Answer Format - FOLLOW EXACTLY:
-- If asked "Which patients...", list ALL patient names from the JSON data (e.g., "John Smith, Jane Doe, Bob Johnson have diabetes")
-- If there are many results (more than 10), give a count AND list first 10 names: "72 patients have diabetes: John Smith, Jane Doe, Bob Johnson, ... and 62 others"
-- Start with the direct fact: "There are 72 patients" NOT "Based on the data, there are 72 patients"
+- If asked "Which patients...", list ALL patient names from the JSON data
+- If there are 20 or fewer results, list ALL names: "There are 14 patients: John Smith, Jane Doe, Bob Johnson, ..." (all 14 names)
+- If there are more than 20 results, give a count AND list first 20 names: "72 patients have diabetes: John Smith, Jane Doe, Bob Johnson, ... and 52 others"
+- Start with the direct fact: "There are 14 patients" NOT "Based on the data, there are 14 patients"
 - Use plain English, as if talking to a friend
 - Format names as: firstName lastName (e.g., "Kyong970 Bechtelar572")
 - Be brief and clear
 - NEVER mention where the data came from
+- IMPORTANT: If the data says "Found 14 total patients", you MUST list all 14 names, not just 6!
 
-Example GOOD answer: "There are 72 patients with diabetes: Kyong970 Bechtelar572, David908 Adams676, John123 Smith456, ... and 69 others."
-Example BAD answer: "There are 0 patients" (when records are provided in JSON)
+Example GOOD answer (14 patients): "There are 14 patients with more than three chronic conditions: Sau887 Hammes673, Gay359 Marquardt819, Hilaria948 Conroy74, Rickey821 Mante251, Jerald662 Herman763, Gerald181 O'Kon634, [and all remaining 8 names]."
+Example GOOD answer (72 patients): "There are 72 patients with diabetes: Kyong970 Bechtelar572, David908 Adams676, ... and 70 others."
+Example BAD answer: "There are 14 patients: [only lists 6]" or "There are 0 patients" (when records are provided in JSON)
 
 Provide ONLY the direct, natural answer now:"""
 
