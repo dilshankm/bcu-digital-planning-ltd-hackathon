@@ -38,6 +38,12 @@ Graph Schema:
     - RETURN must be at END of query - cannot have RETURN in middle then continue with more clauses
     - When returning Encounter nodes, always include readable fields: RETURN e.id, e.description, e.start, e.stop OR RETURN e (if you need full node)
     - For missing/null values: Use IS NULL or IS NOT NULL: WHERE e.stop IS NULL
+    - CRITICAL: When returning patients, ALWAYS use RETURN DISTINCT p (the node), NEVER RETURN DISTINCT p.firstName, p.lastName
+    - To get unique patients: RETURN DISTINCT p (returns unique patient nodes by their node identity)
+    - WRONG: RETURN DISTINCT p.firstName, p.lastName (this only returns unique name combinations, will miss patients with duplicate names - DO NOT USE THIS!)
+    - CORRECT: RETURN DISTINCT p (always use this for patient queries)
+    - Example CORRECT: MATCH (p:Patient)-[:HAS_CONDITION]->(c:Condition) WHERE toLower(c.description) CONTAINS 'diabetes' RETURN DISTINCT p
+    - Example WRONG: MATCH (p:Patient)-[:HAS_CONDITION]->(c:Condition) WHERE toLower(c.description) CONTAINS 'diabetes' RETURN DISTINCT p.firstName, p.lastName (DO NOT USE - will return wrong count!)
 
     MULTIPLE CONDITIONS (AND logic):
     - For "both X and Y": Use MATCH twice with WHERE on each, then return patients who match both
@@ -60,8 +66,10 @@ Graph Schema:
     - Use case-insensitive matching: toLower(c.description) CONTAINS 'diabetes'
     - For blood pressure: WHERE toLower(o.description) CONTAINS 'blood pressure'
     - For cardiac/heart: Use toLower() with CONTAINS: WHERE toLower(e.reasonDescription) CONTAINS 'cardiac' OR toLower(e.reasonDescription) CONTAINS 'heart'
-    - CRITICAL: When returning patients, use DISTINCT to avoid duplicates: MATCH (p:Patient)-[:HAS_CONDITION]->(c:Condition) WHERE toLower(c.description) CONTAINS 'diabetes' RETURN DISTINCT p
-    - If a patient has multiple matching conditions, they'll appear multiple times without DISTINCT
+    - CRITICAL: When returning patients, ALWAYS use DISTINCT to avoid duplicates: MATCH (p:Patient)-[:HAS_CONDITION]->(c:Condition) WHERE toLower(c.description) CONTAINS 'diabetes' RETURN DISTINCT p.firstName, p.lastName
+    - If a patient has multiple matching conditions, they'll appear multiple times without DISTINCT - ALWAYS use DISTINCT p or DISTINCT p.firstName, p.lastName
+    - Example CORRECT: MATCH (p:Patient)-[:HAS_CONDITION]->(c:Condition) WHERE toLower(c.description) CONTAINS 'diabetes' RETURN DISTINCT p
+    - Example WRONG: MATCH (p:Patient)-[:HAS_CONDITION]->(c:Condition) WHERE toLower(c.description) CONTAINS 'diabetes' RETURN p (missing DISTINCT - will return duplicates!)
     - IMPORTANT: When using toLower() on properties that might be NULL, check NULL first: WHERE o.category IS NOT NULL AND toLower(o.category) = 'vital-signs'
     - For Observation category: ALWAYS check NULL first! Use: WHERE (o.category IS NOT NULL AND toLower(o.category) = 'vital-signs') OR toLower(o.description) CONTAINS 'blood pressure'
     - NEVER use toLower() directly on properties that might be NULL without checking first
