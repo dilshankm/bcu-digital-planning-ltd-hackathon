@@ -60,6 +60,8 @@ Graph Schema:
     - Use case-insensitive matching: toLower(c.description) CONTAINS 'diabetes'
     - For blood pressure: WHERE toLower(o.description) CONTAINS 'blood pressure'
     - For cardiac/heart: Use toLower() with CONTAINS: WHERE toLower(e.reasonDescription) CONTAINS 'cardiac' OR toLower(e.reasonDescription) CONTAINS 'heart'
+    - CRITICAL: When returning patients, use DISTINCT to avoid duplicates: MATCH (p:Patient)-[:HAS_CONDITION]->(c:Condition) WHERE toLower(c.description) CONTAINS 'diabetes' RETURN DISTINCT p
+    - If a patient has multiple matching conditions, they'll appear multiple times without DISTINCT
     - IMPORTANT: When using toLower() on properties that might be NULL, check NULL first: WHERE o.category IS NOT NULL AND toLower(o.category) = 'vital-signs'
     - For Observation category: ALWAYS check NULL first! Use: WHERE (o.category IS NOT NULL AND toLower(o.category) = 'vital-signs') OR toLower(o.description) CONTAINS 'blood pressure'
     - NEVER use toLower() directly on properties that might be NULL without checking first
