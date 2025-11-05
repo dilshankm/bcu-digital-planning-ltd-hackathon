@@ -49,6 +49,9 @@ Graph Schema:
     - For "past year": datetime() - duration({{years: 1}})
     - For condition duration: Use HAS_CONDITION relationship properties: (p)-[r:HAS_CONDITION]->(c) WHERE r.start and r.stop exist
     - Example: MATCH (p:Patient)-[r:HAS_CONDITION]->(c:Condition) WHERE r.start IS NOT NULL AND r.stop IS NOT NULL RETURN c.description, AVG(duration.between(datetime(r.start), datetime(r.stop)).days) as avgDuration
+    - CRITICAL: When comparing dates between encounters/procedures, use encounter dates NOT patient birthDate
+    - Example CORRECT (procedure within 30 days of diagnosis): MATCH (p:Patient)-[:HAD_ENCOUNTER]->(e1:Encounter)-[:DIAGNOSED]->(c:Condition), (p)-[:HAD_ENCOUNTER]->(e2:Encounter)-[:HAD_PROCEDURE]->(pr:Procedure) WHERE toLower(c.description) CONTAINS 'diabetes' AND duration.between(datetime(e1.stop), datetime(e2.start)).days <= 30 AND duration.between(datetime(e1.stop), datetime(e2.start)).days >= 0
+    - Example WRONG: duration.between(datetime(e.stop), datetime(p.birthDate)) - NEVER compare encounter dates with birthDate!
 
     TEXT MATCHING RULES - ALWAYS USE CONTAINS:
     - NEVER use exact match {{description: "value"}} - ALWAYS use CONTAINS
@@ -57,6 +60,8 @@ Graph Schema:
     - Use case-insensitive matching: toLower(c.description) CONTAINS 'diabetes'
     - For blood pressure: WHERE toLower(o.description) CONTAINS 'blood pressure'
     - For cardiac/heart: Use toLower() with CONTAINS: WHERE toLower(e.reasonDescription) CONTAINS 'cardiac' OR toLower(e.reasonDescription) CONTAINS 'heart'
+    - IMPORTANT: When using toLower() on properties that might be NULL, check NULL first: WHERE o.category IS NOT NULL AND toLower(o.category) = 'vital-signs'
+    - For Observation category: Check if property exists before using toLower: WHERE o.category IS NOT NULL AND toLower(o.category) = 'vital-signs' OR toLower(o.description) CONTAINS 'blood pressure'
 
     ONLY USE RELATIONSHIPS THAT EXIST:
     - Available: HAD_ENCOUNTER, HAS_CONDITION, DIAGNOSED, UNDERWENT, HAD_PROCEDURE, HAS_OBSERVATION, RECORDED_OBSERVATION
@@ -66,9 +71,12 @@ Graph Schema:
     
     COMMON QUERY PATTERNS:
     - Average conditions per patient: MATCH (p:Patient)-[:HAS_CONDITION]->(c:Condition) WITH p, count(c) as conditionCount RETURN avg(conditionCount) as averageConditionsPerPatient
-    - Condition categories: Condition nodes don't have baseCost - use Encounter.baseCost instead. Example: MATCH (e:Encounter)-[:DIAGNOSED]->(c:Condition) WITH c, MAX(e.baseCost) as maxCost RETURN c.description, maxCost ORDER BY maxCost DESC
+    - Condition categories: Condition nodes don't have baseCost or totalCost - use Encounter.baseCost/totalCost instead. Example: MATCH (e:Encounter)-[:DIAGNOSED]->(c:Condition) WITH c, MAX(e.baseCost) as maxCost RETURN c.description, maxCost ORDER BY maxCost DESC
+    - Average encounter cost per condition: MATCH (e:Encounter)-[:DIAGNOSED]->(c:Condition) WITH c, AVG(e.totalCost) as avgCost RETURN c.description, avgCost ORDER BY avgCost DESC
     - Missing dates: WHERE e.stop IS NULL (returns encounters with null stop dates). Always return readable fields: RETURN e.id, e.description, e.start, e.stop
     - When returning averages/counts, always return the value directly: RETURN avg(conditionCount) as averageConditionsPerPatient (not wrapped in another structure)
+    - Conditions followed by procedures: Use Encounter as bridge - Conditions are DIAGNOSED on Encounters, Procedures are HAD_PROCEDURE on same Encounter
+    - Example: MATCH (e:Encounter)-[:DIAGNOSED]->(c:Condition), (e)-[:HAD_PROCEDURE]->(p:Procedure) WHERE duration.between(datetime(e.start), datetime(e.stop)).days <= 30 RETURN DISTINCT c.description, p.description
 
 Return ONLY the Cypher query, nothing else."""
 
