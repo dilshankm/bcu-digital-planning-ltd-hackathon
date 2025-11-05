@@ -54,6 +54,7 @@ def execute_neo4j_query(state: GraphState) -> GraphState:
     """Execute Cypher query against Neo4j"""
     try:
         cypher = state.get("cypher_query", "")
+        print(cypher)
         if not cypher:
             print("   ⚠️  No Cypher query to execute.")
             return state

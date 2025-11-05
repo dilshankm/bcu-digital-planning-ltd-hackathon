@@ -15,6 +15,7 @@ class Neo4jService:
     def execute_query(self, cypher_query: str, parameters: Dict = None):
         with self.driver.session() as session:
             result = session.run(cypher_query, parameters or {})
+            print("Results", result)
             records = []
             for record in result:
                 data = {}
