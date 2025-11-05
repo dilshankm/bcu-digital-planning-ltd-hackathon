@@ -395,6 +395,11 @@ async def explore_nodes(
                 },
                 "filters": {
                     "show": False
+                },
+                "canvas": {
+                    "width": "100%",
+                    "height": "100vh",
+                    "min_height": "800px"
                 }
             }
         }
@@ -474,6 +479,11 @@ async def explore_node(node_id: int, depth: int = 1):
                 },
                 "filters": {
                     "show": False
+                },
+                "canvas": {
+                    "width": "100%",
+                    "height": "100vh",
+                    "min_height": "800px"
                 }
             }
         }
@@ -556,6 +566,11 @@ async def explore_relationships(
                 },
                 "filters": {
                     "show": False
+                },
+                "canvas": {
+                    "width": "100%",
+                    "height": "100vh",
+                    "min_height": "800px"
                 }
             }
         }
